@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Option Stop Loss & Exit Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            transition: all 0.3s ease;
+        }
+
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a1d29 0%, #2d1b69 100%);
+            color: #e2e8f0;
+        }
+
+        .dark-mode .card {
+            background: #252836;
+            color: #e2e8f0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        .dark-mode .card h2 {
+            color: #7c3aed;
+            border-bottom-color: #7c3aed;
+        }
+
+        .dark-mode .form-group input,
+        .dark-mode .form-group select {
+            background: #1f2937;
+            border-color: #374151;
+            color: #e2e8f0;
+        }
+
+        .dark-mode .form-group input:focus,
+        .dark-mode .form-group select:focus {
+            border-color: #7c3aed;
+        }
+
+        .dark-mode .form-group label {
+            color: #d1d5db;
+        }
+
+        .dark-mode .trade-type-toggle {
+            background: #374151;
+        }
+
+        .dark-mode .trade-type-btn.active {
+            background: #7c3aed;
+        }
+
+        .dark-mode .exit-recommendations {
+            background: #252836;
+        }
+
+        .dark-mode .exit-recommendations h3 {
+            color: #7c3aed;
+        }
+
+        .dark-mode .exit-action {
+            background: #1f2937;
+            border-left-color: #10b981;
+        }
+
+        .dark-mode .exit-action.current {
+            background: #451a03;
+            border-left-color: #f59e0b;
+        }
+
+        .dark-mode .exit-action.completed {
+            background: #111827;
+            border-left-color: #6b7280;
+        }
+
+        .dark-mode .alert.success {
+            background: #064e3b;
+            color: #6ee7b7;
+            border-color: #10b981;
+        }
+
+        .dark-mode .alert.danger {
+            background: #7f1d1d;
+            color: #fca5a5;
+            border-color: #ef4444;
+        }
+
+        .dark-mode .alert.warning {
+            background: #78350f;
+            color: #fcd34d;
+            border-color: #f59e0b;
+        }
+
+        .dark-mode #quickSummary {
+            background: #1f2937;
+            border-left-color: #7c3aed;
+        }
+
+        .dark-mode #quickProfitPercent,
+        .dark-mode #quickStopLoss,
+        .dark-mode #quickStopPercent {
+            color: #7c3aed;
+        }
+
+        .dark-mode #targetDisplay {
+            background: #064e3b;
+            border-left-color: #10b981;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+
+        .dark-mode .theme-toggle {
+            background: rgba(0,0,0,0.3);
+        }
+
+        .dark-mode .theme-toggle:hover {
+            background: rgba(0,0,0,0.5);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .trade-type-toggle {
+            display: flex;
+            background: #f0f0f0;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .trade-type-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .trade-type-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .results {
+            grid-column: 1 / -1;
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-top: 20px;
+        }
+
+        .results h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .metric {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+
+        .metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .current-tier {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 20px 0;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .exit-recommendations {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .exit-recommendations h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .exit-action {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border-left: 4px solid #28a745;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .exit-action.current {
+            border-left-color: #ffc107;
+            background: #fff8e1;
+        }
+
+        .exit-action.completed {
+            border-left-color: #6c757d;
+            background: #f8f9fa;
+            opacity: 0.7;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .alert.danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f1aeb5;
+        }
+
+        .tier-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .tier-box {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #ddd;
+        }
+
+        .tier-box.active {
+            border-color: #667eea;
+            background: #e3f2fd;
+        }
+
+        .tier-box.completed {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+            
+            .card {
+                padding: 15px;
+            }
+            
+            .header {
+                margin-bottom: 20px;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .header p {
+                font-size: 1em;
+            }
+            
+            .form-group {
+                margin-bottom: 12px;
+            }
+            
+            .btn {
+                margin-top: 10px;
+            }
+            
+            #targetDisplay {
+                margin-top: 10px !important;
+                padding: 8px !important;
+            }
+            
+            #quickSummary {
+                margin-top: 12px !important;
+                padding: 10px !important;
+            }
+            
+            .exit-recommendations {
+                padding: 15px !important;
+                margin-top: 15px !important;
+            }
+            
+            .exit-action {
+                padding: 10px !important;
+                margin: 8px 0 !important;
+            }
+            
+            .alert {
+                margin-top: 15px !important;
+                padding: 12px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Option Stop Loss & Exit Manager</h1>
+            <p>Never let green trades turn red - Mathematical profit management</p>
+        </div>
+
+        <div class="main-content">
+            <div class="card">
+                <h2>Trade Setup</h2>
+                <div class="form-group">
+                    <label>Trade Type</label>
+                    <div class="trade-type-toggle">
+                        <button class="trade-type-btn active" onclick="setTradeType('day')">Day Trade</button>
+                        <button class="trade-type-btn" onclick="setTradeType('swing')">Swing Trade</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="optionType">Option Type</label>
+                    <select id="optionType">
+                        <option value="call">Call</option>
+                        <option value="put">Put</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contracts">Number of Contracts</label>
+                    <select id="contracts">
+                        <option value="1">1 Contract</option>
+                        <option value="2">2 Contracts</option>
+                        <option value="3">3 Contracts</option>
+                        <option value="4">4 Contracts</option>
+                        <option value="5">5 Contracts</option>
+                        <option value="6">6 Contracts</option>
+                        <option value="7">7 Contracts</option>
+                        <option value="8">8 Contracts</option>
+                        <option value="9">9 Contracts</option>
+                        <option value="10">10 Contracts</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="avgPrice">Average Price ($)</label>
+                    <input type="number" inputmode="decimal" pattern="[0-9]*" id="avgPrice" step="0.01" placeholder="5.00" onchange="defaultCurrentPrice()">
+                </div>
+                
+                <div class="form-group">
+                    <label for="profitTarget">Profit Target</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="profitTargetPercent" onchange="calculateTarget()" style="flex: 1;">
+                            <option value="">Select %</option>
+                            <option value="5">5%</option>
+                            <option value="10">10%</option>
+                            <option value="15">15%</option>
+                            <option value="20">20%</option>
+                            <option value="25">25%</option>
+                            <option value="30">30%</option>
+                            <option value="40">40%</option>
+                            <option value="50">50%</option>
+                            <option value="75">75%</option>
+                            <option value="100">100%</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <input type="number" inputmode="numeric" pattern="[0-9]*" id="customPercent" placeholder="%" style="width: 80px; display: none;" onchange="calculateTarget()">
+                    </div>
+                </div>
+                
+                <!-- Target Display -->
+                <div id="targetDisplay" style="display: none; margin-top: 15px; padding: 12px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745;">
+                    <div style="font-size: 1.1em; font-weight: bold; color: #155724;">
+                        🎯 Target: <span id="targetPrice">$0.00</span> (<span id="targetPercent">+0%</span>)
+                    </div>
+                    <div style="font-size: 0.9em; color: #155724; margin-top: 5px;">
+                        💰 Profit per contract: <span id="profitPerContract">$0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Stop Loss Management</h2>
+                <div class="form-group">
+                    <label for="currentPrice">Current/Highest Price ($)</label>
+                    <input type="number" inputmode="decimal" pattern="[0-9]*" id="currentPrice" step="0.01" placeholder="Will default to entry price">
+                    <small style="color: #666; font-size: 0.85em;">Update to highest price reached for accurate trailing stops</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="atrValue">ATR Value (<span id="atrTimeframe">15m</span>) - 1.5x Multiplier</label>
+                    <input type="number" inputmode="decimal" pattern="[0-9]*" id="atrValue" step="0.01" placeholder="0.85">
+                </div>
+                
+                <!-- Quick Summary Box -->
+                <div id="quickSummary" style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 4px solid #667eea;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; text-align: center;">
+                        <div>
+                            <div style="font-size: 1.2em; font-weight: bold; color: #667eea;" id="quickProfitPercent">0%</div>
+                            <div style="font-size: 0.8em; color: #666;">Profit %</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 1.2em; font-weight: bold; color: #667eea;" id="quickStopLoss">$0.00</div>
+                            <div style="font-size: 0.8em; color: #666;">Stop Loss</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 1.2em; font-weight: bold; color: #667eea;" id="quickStopPercent">0%</div>
+                            <div style="font-size: 0.8em; color: #666;">Risk %</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Update Button -->
+                <button type="button" class="btn" onclick="calculateAll()" style="margin-top: 15px;">🔄 Update Stop Loss</button>
+            </div>
+        </div>
+
+        <div class="exit-recommendations" id="exitRecommendations" style="display: none; background: white; border-radius: 15px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); margin-top: 20px;">
+            <!-- Exit recommendations will be populated -->
+        </div>
+
+        <div id="alertMessage" style="margin-top: 20px;"></div>
+        
+        <!-- Footer Watermark -->
+        <div style="text-align: center; margin-top: 40px; padding: 20px; color: rgba(255,255,255,0.7); font-size: 0.9em;">
+            🎯 Built by Christian | Never Let Green Turn Red
+        </div>
+    </div>
+
+    <script>
+        let currentTradeType = 'day';
+
+        const profitTiers = [
+            { min: 0, max: 15, stopType: 'atr', trail: null, description: 'ATR-based risk', formula: 'Avg - (ATR × 1.5)' },
+            { min: 15, max: 25, stopType: 'lock5', trail: null, description: 'Lock +5% profit', formula: 'Avg × 1.05' },
+            { min: 25, max: 35, stopType: 'breakeven', trail: null, description: 'Breakeven', formula: 'Avg' },
+            { min: 35, max: 50, stopType: 'trail', trail: 15, description: 'Trail 15%', formula: 'High × 0.85 or High - ATR×1.5' },
+            { min: 50, max: 75, stopType: 'trail', trail: 12, description: 'Trail 12%', formula: 'High × 0.88 or High - ATR×1.2' },
+            { min: 75, max: 100, stopType: 'trail', trail: 10, description: 'Trail 10%', formula: 'High × 0.90 or High - ATR×1.0' },
+            { min: 100, max: Infinity, stopType: 'trail', trail: 8, description: 'Trail 8%', formula: 'High × 0.92 or High - ATR×0.8' }
+        ];
+
+        const exitTiers = [
+            { trigger: 25, sellPercent: 25, description: 'Secure snack money' },
+            { trigger: 50, sellPercent: 50, description: 'Lock strong move' },
+            { trigger: 100, sellPercent: 25, description: 'Home run mode' },
+            { trigger: 200, sellPercent: 0, description: 'Let it ride with tight trail' }
+        ];
+
+        function setTradeType(type) {
+            currentTradeType = type;
+            document.querySelectorAll('.trade-type-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            const timeframe = type === 'day' ? '15m' : '1hr';
+            document.getElementById('atrTimeframe').textContent = timeframe;
+        }
+
+        function calculateTarget() {
+            const avgPrice = parseFloat(document.getElementById('avgPrice').value) || 0;
+            const profitTargetPercent = document.getElementById('profitTargetPercent').value;
+            const customPercentEl = document.getElementById('customPercent');
+            const targetDisplay = document.getElementById('targetDisplay');
+            
+            if (profitTargetPercent === 'custom') {
+                customPercentEl.style.display = 'block';
+                if (!customPercentEl.value) {
+                    targetDisplay.style.display = 'none';
+                    return;
+                }
+            } else {
+                customPercentEl.style.display = 'none';
+            }
+            
+            const percentValue = profitTargetPercent === 'custom' 
+                ? parseFloat(customPercentEl.value) || 0
+                : parseFloat(profitTargetPercent) || 0;
+            
+            if (avgPrice <= 0 || percentValue <= 0) {
+                targetDisplay.style.display = 'none';
+                return;
+            }
+            
+            const targetPrice = avgPrice * (1 + percentValue / 100);
+            const profitPerContract = (targetPrice - avgPrice) * 100;
+            
+            document.getElementById('targetPrice').textContent = '$' + targetPrice.toFixed(2);
+            document.getElementById('targetPercent').textContent = '+' + percentValue + '%';
+            document.getElementById('profitPerContract').textContent = '$' + profitPerContract.toFixed(0);
+            
+            targetDisplay.style.display = 'block';
+        }
+
+        function defaultCurrentPrice() {
+            const avgPrice = document.getElementById('avgPrice').value;
+            const currentPriceField = document.getElementById('currentPrice');
+            
+            if (avgPrice && !currentPriceField.value) {
+                currentPriceField.value = avgPrice;
+            }
+            
+            calculateTarget();
+        }
+
+        function calculateStopLoss(avgPrice, currentPrice, profitPercent, atrValue) {
+            const currentTier = profitTiers.find(tier => profitPercent >= tier.min && profitPercent < tier.max);
+            
+            if (!currentTier) {
+                return avgPrice - (atrValue * 1.5);
+            }
+            
+            if (currentTier.stopType === 'atr') {
+                return avgPrice - (atrValue * 1.5);
+            } else if (currentTier.stopType === 'lock5') {
+                return avgPrice * 1.05;
+            } else if (currentTier.stopType === 'breakeven') {
+                return avgPrice;
+            } else if (currentTier.stopType === 'trail') {
+                if (atrValue > 0) {
+                    const atrMultiplier = currentTier.trail / 10;
+                    return currentPrice - (atrValue * atrMultiplier);
+                } else {
+                    return currentPrice * (1 - currentTier.trail / 100);
+                }
+            }
+            
+            return avgPrice - (atrValue * 1.5);
+        }
+
+        function generateExitRecommendations(contracts, profitPercent, avgPrice, currentPrice) {
+            const recommendations = document.getElementById('exitRecommendations');
+            if (!recommendations) return;
+            
+            recommendations.innerHTML = '<h3>📊 Exit Strategy Recommendations</h3>';
+            
+            if (contracts === 1) {
+                // Single contract strategy - different approach
+                const singleContractTiers = [
+                    { trigger: 25, action: 'Consider taking profit OR trail 12%', description: 'Secure the win' },
+                    { trigger: 50, action: 'Strong take profit consideration OR trail 10%', description: 'Solid gain achieved' },
+                    { trigger: 100, action: 'Take profit OR trail very tight (6-8%)', description: 'Excellent return' },
+                    { trigger: 200, action: 'Trail extremely tight (5%) and let it ride', description: 'Lottery ticket territory' }
+                ];
+                
+                singleContractTiers.forEach(tier => {
+                    const div = document.createElement('div');
+                    div.className = 'exit-action';
+                    
+                    if (profitPercent >= tier.trigger) {
+                        div.classList.add('completed');
+                    } else if (profitPercent >= (tier.trigger * 0.8)) {
+                        div.classList.add('current');
+                    }
+                    
+                    const profitPerContract = currentPrice - avgPrice;
+                    const totalProfit = profitPerContract * 100;
+                    
+                    let actionText = '💡 At +' + tier.trigger + '%: ' + tier.action + ' - ' + tier.description;
+                    if (totalProfit > 0 && profitPercent >= tier.trigger) {
+                        actionText += '<br><small>Potential profit: $' + totalProfit.toFixed(0) + '</small>';
+                    }
+                    
+                    div.innerHTML = actionText;
+                    recommendations.appendChild(div);
+                });
+                
+            } else {
+                // Multiple contracts - scaling strategy
+                exitTiers.forEach(tier => {
+                    const div = document.createElement('div');
+                    div.className = 'exit-action';
+                    
+                    if (profitPercent >= tier.trigger) {
+                        div.classList.add('completed');
+                    } else if (profitPercent >= (tier.trigger * 0.8)) {
+                        div.classList.add('current');
+                    }
+                    
+                    let contractsToSell = 0;
+                    let remainingContracts = contracts;
+                    
+                    if (tier.sellPercent > 0) {
+                        contractsToSell = Math.round((contracts * tier.sellPercent) / 100);
+                        if (contractsToSell === 0 && contracts > 1) contractsToSell = 1;
+                        remainingContracts = contracts - contractsToSell;
+                    }
+                    
+                    const profitPerContract = currentPrice - avgPrice;
+                    const lockInProfit = contractsToSell * profitPerContract * 100;
+                    
+                    let actionText = '';
+                    if (tier.sellPercent === 0) {
+                        actionText = '🚀 At +' + tier.trigger + '%: ' + tier.description + ' (5-6% trail)';
+                    } else {
+                        actionText = '💰 At +' + tier.trigger + '%: Sell ' + contractsToSell + ' contract' + (contractsToSell !== 1 ? 's' : '') + ' (' + tier.sellPercent + '%) - ' + tier.description;
+                        if (lockInProfit > 0) {
+                            actionText += '<br><small>Lock in: $' + lockInProfit.toFixed(0) + ' total | Keep ' + remainingContracts + ' contract' + (remainingContracts !== 1 ? 's' : '') + ' running</small>';
+                        }
+                    }
+                    
+                    div.innerHTML = actionText;
+                    recommendations.appendChild(div);
+                });
+            }
+        }
+
+        function calculateAll() {
+            try {
+                const avgPriceEl = document.getElementById('avgPrice');
+                const currentPriceEl = document.getElementById('currentPrice');
+                const contractsEl = document.getElementById('contracts');
+                const atrValueEl = document.getElementById('atrValue');
+                
+                const avgPrice = parseFloat(avgPriceEl && avgPriceEl.value ? avgPriceEl.value : '0') || 0;
+                const currentPrice = parseFloat(currentPriceEl && currentPriceEl.value ? currentPriceEl.value : '0') || 0;
+                const contracts = parseInt(contractsEl && contractsEl.value ? contractsEl.value : '1') || 1;
+                const atrValue = parseFloat(atrValueEl && atrValueEl.value ? atrValueEl.value : '0') || 0;
+
+                console.log('Input values:', { avgPrice, currentPrice, atrValue });
+
+                if (avgPrice <= 0 || currentPrice <= 0) {
+                    const quickSummaryEl = document.getElementById('quickSummary');
+                    const exitRecommendationsEl = document.getElementById('exitRecommendations');
+                    const alertMessageEl = document.getElementById('alertMessage');
+                    
+                    if (quickSummaryEl) quickSummaryEl.style.display = 'none';
+                    if (exitRecommendationsEl) exitRecommendationsEl.style.display = 'none';
+                    if (alertMessageEl) alertMessageEl.innerHTML = '';
+                    return;
+                }
+
+                const profitPerContract = currentPrice - avgPrice;
+                const profitPercent = (profitPerContract / avgPrice) * 100;
+                
+                console.log('Profit calculation:', { profitPerContract, profitPercent });
+                
+                const suggestedStopLoss = calculateStopLoss(avgPrice, currentPrice, profitPercent, atrValue);
+                
+                console.log('Stop loss calculation:', { suggestedStopLoss });
+                
+                const stopLossPercent = ((avgPrice - suggestedStopLoss) / avgPrice) * 100;
+                
+                console.log('Final values:', { suggestedStopLoss, stopLossPercent });
+                
+                const quickProfitEl = document.getElementById('quickProfitPercent');
+                const quickStopEl = document.getElementById('quickStopLoss');
+                const quickRiskEl = document.getElementById('quickStopPercent');
+                const quickSummaryEl = document.getElementById('quickSummary');
+                
+                if (quickProfitEl && quickStopEl && quickRiskEl && quickSummaryEl) {
+                    quickProfitEl.textContent = profitPercent.toFixed(1) + '%';
+                    quickStopEl.textContent = '$' + suggestedStopLoss.toFixed(2);
+                    quickRiskEl.textContent = Math.abs(stopLossPercent).toFixed(1) + '%';
+                    quickSummaryEl.style.display = 'block';
+                }
+                
+                const currentTier = profitTiers.find(tier => profitPercent >= tier.min && profitPercent < tier.max);
+                
+                if (currentTier) {
+                    generateExitRecommendations(contracts, profitPercent, avgPrice, currentPrice);
+                    const exitRecommendationsEl = document.getElementById('exitRecommendations');
+                    if (exitRecommendationsEl) {
+                        exitRecommendationsEl.style.display = 'block';
+                    }
+                    
+                    let alertMessage = '';
+                    let alertClass = '';
+                    
+                    if (profitPercent > 0) {
+                        alertMessage = '🎯 SET STOP LOSS AT $' + suggestedStopLoss.toFixed(2) + ' - You\'re up ' + profitPercent.toFixed(1) + '% and in the ' + currentTier.description.toLowerCase() + ' zone!';
+                        alertClass = 'success';
+                    } else {
+                        alertMessage = '🔴 Position is down ' + Math.abs(profitPercent).toFixed(1) + '%. ATR-based stop suggests $' + suggestedStopLoss.toFixed(2) + ' for risk management.';
+                        alertClass = 'danger';
+                    }
+                    
+                    const alertMessageEl = document.getElementById('alertMessage');
+                    if (alertMessageEl) {
+                        alertMessageEl.innerHTML = '<div class="alert ' + alertClass + '">' + alertMessage + '</div>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error in calculateAll:', error);
+                const alertMessageEl = document.getElementById('alertMessage');
+                if (alertMessageEl) {
+                    alertMessageEl.innerHTML = '<div class="alert danger">Error calculating values. Please check your inputs.</div>';
+                }
+            }
+        }
+    </script>
+</body>
+</html>
