@@ -393,7 +393,7 @@
                         </div>
                         <div>
                             <div style="font-size: 1.2em; font-weight: bold; color: #667eea;" id="quickStopPercent">0%</div>
-                            <div style="font-size: 0.8em; color: #666;">Locked Profit %</div>
+                            <div style="font-size: 0.8em; color: #666;" id="stopPercentLabel">Locked Profit %</div>
                         </div>
                     </div>
                 </div>
@@ -418,14 +418,22 @@
         let currentTradeType = 'day';
         let lastCalculation = null;
         
-        // Auto-focus on page load
+        // Auto-focus on page load and add enter key support
         window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('avgPrice').focus();
+            
+            const inputs = document.querySelectorAll('input[type="number"]');
+            inputs.forEach(function(input) {
+                input.addEventListener('keypress', function(event) {
+                    if (event.key === 'Enter') {
+                        calculateAll();
+                    }
+                });
+            });
         });
 
         function toggleTheme() {
             document.body.classList.toggle('dark-mode');
-            // Haptic feedback for mobile
             if (navigator.vibrate) {
                 navigator.vibrate(50);
             }
@@ -441,7 +449,6 @@
             const timeframe = type === 'day' ? '15m' : '1hr';
             document.getElementById('atrTimeframe').textContent = timeframe;
             
-            // Haptic feedback for mobile
             if (navigator.vibrate) {
                 navigator.vibrate(30);
             }
@@ -492,20 +499,6 @@
             
             calculateTarget();
         }
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                calculateAll();
-            }
-        }
-        
-        // Add enter key support to all input fields
-        document.addEventListener('DOMContentLoaded', function() {
-            const inputs = document.querySelectorAll('input[type="number"]');
-            inputs.forEach(function(input) {
-                input.addEventListener('keypress', handleKeyPress);
-            });
-        });
         
         function clearAll() {
             document.getElementById('avgPrice').value = '';
@@ -518,11 +511,10 @@
             document.getElementById('targetDisplay').style.display = 'none';
             document.getElementById('quickSummary').style.display = 'none';
             document.getElementById('alertMessage').innerHTML = '';
+            document.getElementById('loadLastBtn').disabled = true;
             
-            // Focus back to first field
             document.getElementById('avgPrice').focus();
             
-            // Haptic feedback
             if (navigator.vibrate) {
                 navigator.vibrate(50);
             }
@@ -536,39 +528,32 @@
             document.getElementById('atrValue').value = lastCalculation.atrValue;
             document.getElementById('contracts').value = lastCalculation.contracts;
             
-            // Trigger calculation
             defaultCurrentPrice();
             calculateAll();
             
-            // Haptic feedback
             if (navigator.vibrate) {
                 navigator.vibrate(50);
             }
         }
 
         function calculateAll() {
-            const calculateBtn = event ? event.target : document.querySelector('.btn');
+            const calculateBtn = event ? event.target : document.querySelector('button[onclick="calculateAll()"]');
             
-            // Loading state
             const originalText = calculateBtn.textContent;
             calculateBtn.textContent = '⏳ Calculating...';
             calculateBtn.disabled = true;
             
-            // Small delay for loading effect
             setTimeout(function() {
                 performCalculation();
                 
-                // Reset button
                 calculateBtn.textContent = originalText;
                 calculateBtn.disabled = false;
                 
-                // Success animation
                 calculateBtn.style.transform = 'scale(0.95)';
                 setTimeout(function() {
                     calculateBtn.style.transform = 'scale(1)';
                 }, 150);
                 
-                // Haptic feedback
                 if (navigator.vibrate) {
                     navigator.vibrate([50, 50, 50]);
                 }
@@ -626,13 +611,27 @@
                 tierDescription = '👑 God Tier';
             }
             
-            const stopLossPercent = ((avgPrice - suggestedStopLoss) / avgPrice) * 100;
-            
+            // Update display values
             document.getElementById('quickProfitPercent').textContent = profitPercent.toFixed(1) + '%';
             document.getElementById('quickStopLoss').textContent = '$' + suggestedStopLoss.toFixed(2);
-            document.getElementById('quickStopPercent').textContent = Math.abs(stopLossPercent).toFixed(1) + '%';
+            
+            // Smart labeling logic
+            const stopLossPercent = ((suggestedStopLoss - avgPrice) / avgPrice) * 100;
+            
+            if (suggestedStopLoss < avgPrice) {
+                // Risk management mode
+                const riskPercent = Math.abs(stopLossPercent);
+                document.getElementById('quickStopPercent').textContent = riskPercent.toFixed(1) + '%';
+                document.getElementById('stopPercentLabel').textContent = 'Stop Loss %';
+            } else {
+                // Profit protection mode
+                document.getElementById('quickStopPercent').textContent = stopLossPercent.toFixed(1) + '%';
+                document.getElementById('stopPercentLabel').textContent = 'Locked Profit %';
+            }
+            
             document.getElementById('quickSummary').style.display = 'block';
             
+            // Alert message
             let alertMessage = '';
             let alertClass = '';
             
@@ -647,7 +646,7 @@
                     alertMessage += ' | Protect $' + (lockedProfit * 100).toFixed(0) + ' profit per contract';
                 }
                 
-                // Add scaling suggestions for 2+ contracts
+                // Scaling suggestions for 2+ contracts
                 if (contracts > 1) {
                     let scalingMessage = '';
                     
@@ -678,7 +677,7 @@
                 alertClass = 'danger';
             }
             
-            // Save calculation for "Load Last" feature
+            // Save for load last feature
             lastCalculation = {
                 avgPrice: avgPrice,
                 currentPrice: currentPrice,
@@ -686,9 +685,7 @@
                 contracts: contracts
             };
             
-            // Enable "Load Last" button
             document.getElementById('loadLastBtn').disabled = false;
-            
             document.getElementById('alertMessage').innerHTML = '<div class="alert ' + alertClass + '">' + alertMessage + '</div>';
         }
     </script>
