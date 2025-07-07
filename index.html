@@ -220,6 +220,11 @@
             color: white;
         }
 
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
         .btn {
             background: linear-gradient(45deg, #667eea, #764ba2);
             color: white;
@@ -304,8 +309,8 @@
     
     <div class="container">
         <div class="header">
-            <h1>Option Stop Loss & Exit Manager</h1>
-            <p>Never Let Green Trades Turn Red</p>
+            <h1>Protect Your Profits</h1>
+            <p>Never Let Green Turn Red</p>
         </div>
 
         <div class="main-content">
@@ -327,12 +332,17 @@
                         <option value="3">3 Contracts</option>
                         <option value="4">4 Contracts</option>
                         <option value="5">5 Contracts</option>
+                        <option value="6">6 Contracts</option>
+                        <option value="7">7 Contracts</option>
+                        <option value="8">8 Contracts</option>
+                        <option value="9">9 Contracts</option>
+                        <option value="10">10 Contracts</option>
                     </select>
                 </div>
                 
                 <div class="form-group">
                     <label for="avgPrice">Average Price ($)</label>
-                    <input type="number" id="avgPrice" step="0.01" placeholder="5.00" onchange="defaultCurrentPrice()">
+                    <input type="number" id="avgPrice" step="0.01" min="0.01" placeholder="5.00" inputmode="decimal" onchange="defaultCurrentPrice()">
                 </div>
                 
                 <div class="form-group">
@@ -345,7 +355,7 @@
                             <option value="100">100%</option>
                             <option value="custom">Custom</option>
                         </select>
-                        <input type="number" id="customPercent" placeholder="%" style="width: 80px; display: none;" onchange="calculateTarget()" min="1" max="500">
+                        <input type="number" id="customPercent" placeholder="%" style="width: 80px; display: none;" onchange="calculateTarget()" min="1" max="500" inputmode="numeric">
                     </div>
                 </div>
                 
@@ -363,12 +373,12 @@
                 <h2>Stop Loss Management</h2>
                 <div class="form-group">
                     <label for="currentPrice">Current Price ($)</label>
-                    <input type="number" id="currentPrice" step="0.01" placeholder="Will default to entry price">
+                    <input type="number" id="currentPrice" step="0.01" min="0.01" placeholder="Will default to entry price" inputmode="decimal">
                 </div>
                 
                 <div class="form-group">
                     <label for="atrValue">ATR Value (<span id="atrTimeframe">15m</span>)</label>
-                    <input type="number" id="atrValue" step="0.01" placeholder="0.85">
+                    <input type="number" id="atrValue" step="0.01" min="0" placeholder="0.85" inputmode="decimal">
                 </div>
                 
                 <div id="quickSummary" style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 4px solid #667eea;">
@@ -389,6 +399,11 @@
                 </div>
                 
                 <button type="button" class="btn" onclick="calculateAll()" style="margin-top: 15px;">🔄 Update Stop Loss</button>
+                
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button type="button" class="btn" onclick="clearAll()" style="background: #6c757d; flex: 1;">🗑️ Clear All</button>
+                    <button type="button" class="btn" onclick="loadLastCalculation()" style="background: #28a745; flex: 1;" id="loadLastBtn" disabled>📋 Load Last</button>
+                </div>
             </div>
         </div>
 
@@ -401,9 +416,19 @@
 
     <script>
         let currentTradeType = 'day';
+        let lastCalculation = null;
+        
+        // Auto-focus on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('avgPrice').focus();
+        });
 
         function toggleTheme() {
             document.body.classList.toggle('dark-mode');
+            // Haptic feedback for mobile
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
         }
 
         function setTradeType(type) {
@@ -415,6 +440,11 @@
             
             const timeframe = type === 'day' ? '15m' : '1hr';
             document.getElementById('atrTimeframe').textContent = timeframe;
+            
+            // Haptic feedback for mobile
+            if (navigator.vibrate) {
+                navigator.vibrate(30);
+            }
         }
 
         function calculateTarget() {
@@ -463,7 +493,89 @@
             calculateTarget();
         }
 
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                calculateAll();
+            }
+        }
+        
+        // Add enter key support to all input fields
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = document.querySelectorAll('input[type="number"]');
+            inputs.forEach(function(input) {
+                input.addEventListener('keypress', handleKeyPress);
+            });
+        });
+        
+        function clearAll() {
+            document.getElementById('avgPrice').value = '';
+            document.getElementById('currentPrice').value = '';
+            document.getElementById('atrValue').value = '';
+            document.getElementById('profitTargetPercent').value = '';
+            document.getElementById('customPercent').value = '';
+            document.getElementById('customPercent').style.display = 'none';
+            document.getElementById('contracts').value = '1';
+            document.getElementById('targetDisplay').style.display = 'none';
+            document.getElementById('quickSummary').style.display = 'none';
+            document.getElementById('alertMessage').innerHTML = '';
+            
+            // Focus back to first field
+            document.getElementById('avgPrice').focus();
+            
+            // Haptic feedback
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+        }
+        
+        function loadLastCalculation() {
+            if (!lastCalculation) return;
+            
+            document.getElementById('avgPrice').value = lastCalculation.avgPrice;
+            document.getElementById('currentPrice').value = lastCalculation.currentPrice;
+            document.getElementById('atrValue').value = lastCalculation.atrValue;
+            document.getElementById('contracts').value = lastCalculation.contracts;
+            
+            // Trigger calculation
+            defaultCurrentPrice();
+            calculateAll();
+            
+            // Haptic feedback
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+        }
+
         function calculateAll() {
+            const calculateBtn = event ? event.target : document.querySelector('.btn');
+            
+            // Loading state
+            const originalText = calculateBtn.textContent;
+            calculateBtn.textContent = '⏳ Calculating...';
+            calculateBtn.disabled = true;
+            
+            // Small delay for loading effect
+            setTimeout(function() {
+                performCalculation();
+                
+                // Reset button
+                calculateBtn.textContent = originalText;
+                calculateBtn.disabled = false;
+                
+                // Success animation
+                calculateBtn.style.transform = 'scale(0.95)';
+                setTimeout(function() {
+                    calculateBtn.style.transform = 'scale(1)';
+                }, 150);
+                
+                // Haptic feedback
+                if (navigator.vibrate) {
+                    navigator.vibrate([50, 50, 50]);
+                }
+            }, 300);
+        }
+        
+        function performCalculation() {
             const avgPrice = parseFloat(document.getElementById('avgPrice').value) || 0;
             const currentPrice = parseFloat(document.getElementById('currentPrice').value) || 0;
             const atrValue = parseFloat(document.getElementById('atrValue').value) || 0;
@@ -565,6 +677,17 @@
                 alertMessage = '🔴 Position is down ' + Math.abs(profitPercent).toFixed(1) + '%. ' + tierDescription + ' suggests $' + suggestedStopLoss.toFixed(2);
                 alertClass = 'danger';
             }
+            
+            // Save calculation for "Load Last" feature
+            lastCalculation = {
+                avgPrice: avgPrice,
+                currentPrice: currentPrice,
+                atrValue: atrValue,
+                contracts: contracts
+            };
+            
+            // Enable "Load Last" button
+            document.getElementById('loadLastBtn').disabled = false;
             
             document.getElementById('alertMessage').innerHTML = '<div class="alert ' + alertClass + '">' + alertMessage + '</div>';
         }
