@@ -400,10 +400,7 @@
                 
                 <button type="button" class="btn" onclick="calculateAll()" style="margin-top: 15px;">🔄 Update Stop Loss</button>
                 
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button type="button" class="btn" onclick="clearAll()" style="background: #6c757d; flex: 1;">🗑️ Clear All</button>
-                    <button type="button" class="btn" onclick="loadLastCalculation()" style="background: #28a745; flex: 1;" id="loadLastBtn" disabled>📋 Load Last</button>
-                </div>
+                <button type="button" class="btn" onclick="clearAll()" style="background: #6c757d; margin-top: 10px;">🗑️ Clear All</button>
             </div>
         </div>
 
@@ -510,27 +507,10 @@
             document.getElementById('targetDisplay').style.display = 'none';
             document.getElementById('quickSummary').style.display = 'none';
             document.getElementById('alertMessage').innerHTML = '';
-            document.getElementById('loadLastBtn').disabled = true;
             
             window.lastStopLoss = null;
             
             document.getElementById('avgPrice').focus();
-            
-            if (navigator.vibrate) {
-                navigator.vibrate(50);
-            }
-        }
-        
-        function loadLastCalculation() {
-            if (!lastCalculation) return;
-            
-            document.getElementById('avgPrice').value = lastCalculation.avgPrice;
-            document.getElementById('currentPrice').value = lastCalculation.currentPrice;
-            document.getElementById('atrValue').value = lastCalculation.atrValue;
-            document.getElementById('contracts').value = lastCalculation.contracts;
-            
-            defaultCurrentPrice();
-            calculateAll();
             
             if (navigator.vibrate) {
                 navigator.vibrate(50);
@@ -725,7 +705,6 @@
                 contracts: contracts
             };
             
-            document.getElementById('loadLastBtn').disabled = false;
             document.getElementById('alertMessage').innerHTML = '<div class="alert ' + alertClass + '">' + alertMessage + '</div>';
         }
     </script>
