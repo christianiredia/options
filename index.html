@@ -418,7 +418,6 @@
         let currentTradeType = 'day';
         let lastCalculation = null;
         
-        // Auto-focus on page load and add enter key support
         window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('avgPrice').focus();
             
@@ -513,6 +512,8 @@
             document.getElementById('alertMessage').innerHTML = '';
             document.getElementById('loadLastBtn').disabled = true;
             
+            window.lastStopLoss = null;
+            
             document.getElementById('avgPrice').focus();
             
             if (navigator.vibrate) {
@@ -577,95 +578,134 @@
             let suggestedStopLoss;
             let tierDescription = '';
             
-            if (profitPercent <= 19) {
+            if (profitPercent < 20) {
                 suggestedStopLoss = avgPrice - (atrValue * 1.5);
-                tierDescription = '🔴 ATR Risk Zone';
-            } else if (profitPercent <= 29) {
-                const minLock = avgPrice * 1.08;
-                const atrBuffer = avgPrice + (atrValue * 0.3);
-                suggestedStopLoss = Math.max(minLock, atrBuffer);
-                tierDescription = '🟡 Smart Lock';
-            } else if (profitPercent <= 39) {
-                suggestedStopLoss = avgPrice + (profitPerContract * 0.30);
-                tierDescription = '🟢 Profit Bank';
-            } else if (profitPercent <= 54) {
-                suggestedStopLoss = avgPrice + (profitPerContract * 0.45);
-                tierDescription = '🔵 Momentum Lock';
-            } else if (profitPercent <= 69) {
-                suggestedStopLoss = currentPrice - (atrValue * 1.3);
-                tierDescription = '🟣 Trail Launch';
-            } else if (profitPercent <= 89) {
-                suggestedStopLoss = currentPrice - (atrValue * 1.0);
-                tierDescription = '🟠 Trail Tight';
-            } else if (profitPercent <= 124) {
-                suggestedStopLoss = currentPrice - (atrValue * 0.8);
-                tierDescription = '🚀 Winner Mode';
-            } else if (profitPercent <= 174) {
-                suggestedStopLoss = currentPrice - (atrValue * 0.6);
-                tierDescription = '💎 Diamond Hands';
-            } else if (profitPercent <= 249) {
-                suggestedStopLoss = currentPrice - (atrValue * 0.4);
-                tierDescription = '🏆 Legend Mode';
-            } else {
-                suggestedStopLoss = currentPrice - (atrValue * 0.25);
+                tierDescription = '🔴 Risk Management';
+                
+            } else if (profitPercent < 30) {
+                const profitLock = avgPrice + (profitPerContract * 0.30);
+                const atrTrail = currentPrice - (atrValue * 1.0);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '🟡 Early Lock';
+                
+            } else if (profitPercent < 50) {
+                const profitLock = avgPrice + (profitPerContract * 0.45);
+                const atrTrail = currentPrice - (atrValue * 0.9);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '🟢 Growing Trend';
+                
+            } else if (profitPercent < 75) {
+                const profitLock = avgPrice + (profitPerContract * 0.60);
+                const atrTrail = currentPrice - (atrValue * 0.8);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '🔵 Solid Momentum';
+                
+            } else if (profitPercent < 100) {
+                const profitLock = avgPrice + (profitPerContract * 0.70);
+                const atrTrail = currentPrice - (atrValue * 0.6);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '🟣 Strong Runner';
+                
+            } else if (profitPercent < 150) {
+                const profitLock = avgPrice + (profitPerContract * 0.80);
+                const atrTrail = currentPrice - (atrValue * 0.5);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '🟠 Big Profit Zone';
+                
+            } else if (profitPercent < 200) {
+                const profitLock = avgPrice + (profitPerContract * 0.87);
+                const atrTrail = currentPrice - (atrValue * 0.4);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '🚀 Explosive Gains';
+                
+            } else if (profitPercent < 300) {
+                const profitLock = avgPrice + (profitPerContract * 0.92);
+                const atrTrail = currentPrice - (atrValue * 0.25);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '💎 Diamond Tier';
+                
+            } else if (profitPercent < 400) {
+                const profitLock = avgPrice + (profitPerContract * 0.95);
+                const atrTrail = currentPrice - (atrValue * 0.15);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
                 tierDescription = '👑 God Tier';
+                
+            } else if (profitPercent < 500) {
+                const profitLock = avgPrice + (profitPerContract * 0.97);
+                const atrTrail = currentPrice - (atrValue * 0.1);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '🐉 Ultra Tier';
+                
+            } else {
+                const profitLock = avgPrice + (profitPerContract * 0.98);
+                const atrTrail = currentPrice - (atrValue * 0.05);
+                suggestedStopLoss = Math.max(profitLock, atrTrail);
+                tierDescription = '🔒 Max Cap';
             }
             
-            // Update display values
+            if (typeof window.lastStopLoss === 'number') {
+                if (suggestedStopLoss < window.lastStopLoss) {
+                    suggestedStopLoss = window.lastStopLoss;
+                    tierDescription += ' (Floor Protected)';
+                } else {
+                    window.lastStopLoss = suggestedStopLoss;
+                }
+            } else {
+                window.lastStopLoss = suggestedStopLoss;
+            }
+            
+            if (profitPercent >= 20 && suggestedStopLoss < avgPrice) {
+                suggestedStopLoss = avgPrice * 1.01;
+                tierDescription += ' (Breakeven Floor)';
+                window.lastStopLoss = suggestedStopLoss;
+            }
+            
             document.getElementById('quickProfitPercent').textContent = profitPercent.toFixed(1) + '%';
             document.getElementById('quickStopLoss').textContent = '$' + suggestedStopLoss.toFixed(2);
             
-            // Smart labeling logic
             const stopLossPercent = ((suggestedStopLoss - avgPrice) / avgPrice) * 100;
             
             if (suggestedStopLoss < avgPrice) {
-                // Risk management mode
                 const riskPercent = Math.abs(stopLossPercent);
                 document.getElementById('quickStopPercent').textContent = riskPercent.toFixed(1) + '%';
-                document.getElementById('stopPercentLabel').textContent = 'Stop Loss %';
+                document.getElementById('stopPercentLabel').textContent = 'Risk %';
             } else {
-                // Profit protection mode
                 document.getElementById('quickStopPercent').textContent = stopLossPercent.toFixed(1) + '%';
                 document.getElementById('stopPercentLabel').textContent = 'Locked Profit %';
             }
             
             document.getElementById('quickSummary').style.display = 'block';
             
-            // Alert message
             let alertMessage = '';
             let alertClass = '';
             
             if (profitPercent > 0) {
-                let lockedProfit = suggestedStopLoss - avgPrice;
+                const lockedProfit = Math.max(0, suggestedStopLoss - avgPrice);
+                const lockedPercent = profitPerContract > 0 ? (lockedProfit / profitPerContract) * 100 : 0;
                 
                 alertMessage = '🎯 SET STOP LOSS AT $' + suggestedStopLoss.toFixed(2) + ' - You\'re up ' + profitPercent.toFixed(1) + '% (' + tierDescription + ')';
                 
-                if (profitPercent <= 54 && lockedProfit > 0) {
-                    alertMessage += ' | Locking: $' + (lockedProfit * 100).toFixed(0) + ' per contract';
-                } else if (profitPercent > 54 && lockedProfit > 0) {
-                    alertMessage += ' | Protect $' + (lockedProfit * 100).toFixed(0) + ' profit per contract';
+                if (lockedProfit > 0) {
+                    alertMessage += ' | Locking ' + lockedPercent.toFixed(0) + '% of gains ($' + (lockedProfit * 100).toFixed(0) + ' per contract)';
                 }
                 
-                // Scaling suggestions for 2+ contracts
                 if (contracts > 1) {
                     let scalingMessage = '';
                     
-                    if (profitPercent >= 20 && profitPercent <= 29) {
-                        const contractsToSell = Math.max(1, Math.round(contracts * 0.25));
-                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' - test the waters';
-                    } else if (profitPercent >= 30 && profitPercent <= 39) {
-                        const contractsToSell = Math.max(1, Math.round(contracts * 0.33));
-                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' - secure snack money';
-                    } else if (profitPercent >= 40 && profitPercent <= 54) {
-                        const contractsToSell = Math.max(1, Math.round(contracts * 0.25));
-                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' - confirm the move';
-                    } else if (profitPercent >= 55 && profitPercent <= 69) {
-                        const contractsToSell = Math.max(1, Math.round(contracts * 0.25));
-                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' - prepare for trail';
-                    } else if (profitPercent >= 70 && profitPercent <= 89) {
-                        scalingMessage = '<br><br>📊 Trail remaining contracts tight - let winners run';
-                    } else if (profitPercent >= 90) {
-                        scalingMessage = '<br><br>📊 Trail remaining contracts ultra-tight - diamond hands mode';
+                    if (profitPercent >= 30 && profitPercent <= 49) {
+                        const contractsToSell = Math.ceil(contracts * 0.25);
+                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (25%) - trend is forming, secure some gains';
+                    } else if (profitPercent >= 50 && profitPercent <= 74) {
+                        const contractsToSell = Math.ceil(contracts * 0.33);
+                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (33%) - solid momentum, lock core profits';
+                    } else if (profitPercent >= 75 && profitPercent <= 99) {
+                        const contractsToSell = Math.ceil(contracts * 0.25);
+                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (25%) - strong runner, prepare for tight trail';
+                    } else if (profitPercent >= 100 && profitPercent <= 149) {
+                        const contractsToSell = Math.ceil(contracts * 0.20);
+                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (20%) - big profit zone, bank some life-changing money';
+                    } else if (profitPercent >= 150) {
+                        scalingMessage = '<br><br>📊 Trail remaining contracts ultra-tight - you\'re in legendary territory, let the winners run!';
                     }
                     
                     alertMessage += scalingMessage;
@@ -673,11 +713,11 @@
                 
                 alertClass = 'success';
             } else {
-                alertMessage = '🔴 Position is down ' + Math.abs(profitPercent).toFixed(1) + '%. ' + tierDescription + ' suggests $' + suggestedStopLoss.toFixed(2);
+                const riskAmount = Math.abs(suggestedStopLoss - avgPrice);
+                alertMessage = '🔴 Position down ' + Math.abs(profitPercent).toFixed(1) + '%. ' + tierDescription + ' stop at $' + suggestedStopLoss.toFixed(2) + ' (Risk: $' + (riskAmount * 100).toFixed(0) + ' per contract)';
                 alertClass = 'danger';
             }
             
-            // Save for load last feature
             lastCalculation = {
                 avgPrice: avgPrice,
                 currentPrice: currentPrice,
