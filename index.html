@@ -342,7 +342,7 @@
                 
                 <div class="form-group">
                     <label for="avgPrice">Average Price ($)</label>
-                    <input type="number" id="avgPrice" step="0.01" min="0.01" placeholder="5.00" inputmode="decimal" onchange="defaultCurrentPrice()">
+                    <input type="number" id="avgPrice" step="0.01" min="0.01" placeholder="1.89" inputmode="decimal" onchange="defaultCurrentPrice()">
                 </div>
                 
                 <div class="form-group">
@@ -377,8 +377,13 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="atrValue">ATR Value (<span id="atrTimeframe">15m</span>)</label>
-                    <input type="number" id="atrValue" step="0.01" min="0" placeholder="0.85" inputmode="decimal">
+                    <label for="delta">Option Delta</label>
+                    <input type="number" id="delta" step="0.001" min="0.001" max="1" placeholder="0.3263" inputmode="decimal">
+                </div>
+                
+                <div class="form-group">
+                    <label for="atrValue">Stock ATR (<span id="atrTimeframe">15m</span>)</label>
+                    <input type="number" id="atrValue" step="0.01" min="0" placeholder="1.46" inputmode="decimal">
                 </div>
                 
                 <div id="quickSummary" style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 4px solid #667eea;">
@@ -398,7 +403,7 @@
                     </div>
                 </div>
                 
-                <button type="button" class="btn" onclick="calculateAll()" style="margin-top: 15px;">🔄 Update Stop Loss</button>
+                <button type="button" class="btn" onclick="calculateStopLoss()" style="margin-top: 15px;">🔄 Update Stop Loss</button>
                 
                 <button type="button" class="btn" onclick="clearAll()" style="background: #6c757d; margin-top: 10px;">🗑️ Clear All</button>
             </div>
@@ -413,16 +418,18 @@
 
     <script>
         let currentTradeType = 'day';
-        let lastCalculation = null;
+        let storedStopLoss = null; // Clean never-lower tracking
         
+        // Initialize
         window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('avgPrice').focus();
             
+            // Enter key triggers calculation
             const inputs = document.querySelectorAll('input[type="number"]');
             inputs.forEach(function(input) {
                 input.addEventListener('keypress', function(event) {
                     if (event.key === 'Enter') {
-                        calculateAll();
+                        calculateStopLoss();
                     }
                 });
             });
@@ -497,18 +504,23 @@
         }
         
         function clearAll() {
+            // Reset all inputs
             document.getElementById('avgPrice').value = '';
             document.getElementById('currentPrice').value = '';
             document.getElementById('atrValue').value = '';
+            document.getElementById('delta').value = '';
             document.getElementById('profitTargetPercent').value = '';
             document.getElementById('customPercent').value = '';
             document.getElementById('customPercent').style.display = 'none';
             document.getElementById('contracts').value = '1';
+            
+            // Hide displays
             document.getElementById('targetDisplay').style.display = 'none';
             document.getElementById('quickSummary').style.display = 'none';
             document.getElementById('alertMessage').innerHTML = '';
             
-            window.lastStopLoss = null;
+            // Reset stop loss tracking
+            storedStopLoss = null;
             
             document.getElementById('avgPrice').focus();
             
@@ -517,135 +529,101 @@
             }
         }
 
-        function calculateAll() {
-            const calculateBtn = event ? event.target : document.querySelector('button[onclick="calculateAll()"]');
-            
-            const originalText = calculateBtn.textContent;
-            calculateBtn.textContent = '⏳ Calculating...';
-            calculateBtn.disabled = true;
-            
-            setTimeout(function() {
-                performCalculation();
-                
-                calculateBtn.textContent = originalText;
-                calculateBtn.disabled = false;
-                
-                calculateBtn.style.transform = 'scale(0.95)';
-                setTimeout(function() {
-                    calculateBtn.style.transform = 'scale(1)';
-                }, 150);
-                
-                if (navigator.vibrate) {
-                    navigator.vibrate([50, 50, 50]);
-                }
-            }, 300);
-        }
-        
-        function performCalculation() {
+        function calculateStopLoss() {
+            // Get all inputs
             const avgPrice = parseFloat(document.getElementById('avgPrice').value) || 0;
             const currentPrice = parseFloat(document.getElementById('currentPrice').value) || 0;
-            const atrValue = parseFloat(document.getElementById('atrValue').value) || 0;
+            const stockATR = parseFloat(document.getElementById('atrValue').value) || 0;
+            const delta = parseFloat(document.getElementById('delta').value) || 0;
             const contracts = parseInt(document.getElementById('contracts').value) || 1;
 
-            if (avgPrice <= 0 || currentPrice <= 0) {
-                document.getElementById('alertMessage').innerHTML = '<div class="alert warning">Please enter both average price and current price.</div>';
+            // Input validation
+            if (!avgPrice || !currentPrice || !stockATR || !delta) {
+                document.getElementById('alertMessage').innerHTML = '<div class="alert warning">Please fill in all required fields (Average Price, Current Price, Delta, Stock ATR).</div>';
                 return;
             }
 
+            if (avgPrice <= 0 || currentPrice <= 0 || stockATR <= 0 || delta <= 0) {
+                document.getElementById('alertMessage').innerHTML = '<div class="alert warning">All values must be greater than zero.</div>';
+                return;
+            }
+
+            // Calculate core values
+            const optionATR = stockATR * delta;
             const profitPerContract = currentPrice - avgPrice;
             const profitPercent = (profitPerContract / avgPrice) * 100;
+
+            // Handle losing/breakeven trades
+            if (profitPerContract <= 0) {
+                storedStopLoss = null; // Reset never-lower tracking
+                const stopLoss = currentPrice - (optionATR * 1.0);
+                displayResults(profitPercent, stopLoss, avgPrice, currentPrice, profitPerContract, contracts, true);
+                return;
+            }
+
+            // NEW SYSTEM: Calculate stop loss using exponential curve
             
-            let suggestedStopLoss;
-            let tierDescription = '';
+            // 1. EXPONENTIAL LOCK CURVE
+            const lockFactor = Math.min(0.95, 1 - Math.exp(-profitPercent / 80));
+            const profitLock = avgPrice + (profitPerContract * lockFactor);
             
+            // 2. TIGHTER ATR MULTIPLIERS
+            let atrMultiplier;
             if (profitPercent < 20) {
-                suggestedStopLoss = avgPrice - (atrValue * 1.5);
-                tierDescription = '🔴 Risk Management';
-                
+                atrMultiplier = 1.0;
             } else if (profitPercent < 30) {
-                const profitLock = avgPrice + (profitPerContract * 0.30);
-                const atrTrail = currentPrice - (atrValue * 1.0);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '🟡 Early Lock';
-                
+                atrMultiplier = 0.8;
             } else if (profitPercent < 50) {
-                const profitLock = avgPrice + (profitPerContract * 0.45);
-                const atrTrail = currentPrice - (atrValue * 0.9);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '🟢 Growing Trend';
-                
+                atrMultiplier = 0.7;
             } else if (profitPercent < 75) {
-                const profitLock = avgPrice + (profitPerContract * 0.60);
-                const atrTrail = currentPrice - (atrValue * 0.8);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '🔵 Solid Momentum';
-                
+                atrMultiplier = 0.6;
             } else if (profitPercent < 100) {
-                const profitLock = avgPrice + (profitPerContract * 0.70);
-                const atrTrail = currentPrice - (atrValue * 0.6);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '🟣 Strong Runner';
-                
+                atrMultiplier = 0.5;
             } else if (profitPercent < 150) {
-                const profitLock = avgPrice + (profitPerContract * 0.80);
-                const atrTrail = currentPrice - (atrValue * 0.5);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '🟠 Big Profit Zone';
-                
+                atrMultiplier = 0.4;
             } else if (profitPercent < 200) {
-                const profitLock = avgPrice + (profitPerContract * 0.87);
-                const atrTrail = currentPrice - (atrValue * 0.4);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '🚀 Explosive Gains';
-                
+                atrMultiplier = 0.3;
             } else if (profitPercent < 300) {
-                const profitLock = avgPrice + (profitPerContract * 0.92);
-                const atrTrail = currentPrice - (atrValue * 0.25);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '💎 Diamond Tier';
-                
+                atrMultiplier = 0.2;
             } else if (profitPercent < 400) {
-                const profitLock = avgPrice + (profitPerContract * 0.95);
-                const atrTrail = currentPrice - (atrValue * 0.15);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '👑 God Tier';
-                
-            } else if (profitPercent < 500) {
-                const profitLock = avgPrice + (profitPerContract * 0.97);
-                const atrTrail = currentPrice - (atrValue * 0.1);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '🐉 Ultra Tier';
-                
+                atrMultiplier = 0.12;
             } else {
-                const profitLock = avgPrice + (profitPerContract * 0.98);
-                const atrTrail = currentPrice - (atrValue * 0.05);
-                suggestedStopLoss = Math.max(profitLock, atrTrail);
-                tierDescription = '🔒 Max Cap';
+                atrMultiplier = 0.04;
             }
             
-            if (typeof window.lastStopLoss === 'number') {
-                if (suggestedStopLoss < window.lastStopLoss) {
-                    suggestedStopLoss = window.lastStopLoss;
-                    tierDescription += ' (Floor Protected)';
-                } else {
-                    window.lastStopLoss = suggestedStopLoss;
-                }
+            const atrTrail = currentPrice - (optionATR * atrMultiplier);
+            
+            // 3. MAX GIVEBACK PROTECTION
+            const maxGiveback = currentPrice - (profitPerContract * 0.4);
+            
+            // 4. CALCULATE INITIAL STOP
+            let stopLoss = Math.max(profitLock, atrTrail, maxGiveback);
+            
+            // 5. EARLY BREAKEVEN PROTECTION (15% trigger with 5% buffer)
+            if (profitPercent >= 15) {
+                const breakevenFloor = avgPrice * 1.05;
+                stopLoss = Math.max(stopLoss, breakevenFloor);
+            }
+            
+            // 6. NEVER-LOWER RULE (applied last)
+            if (storedStopLoss && stopLoss < storedStopLoss) {
+                stopLoss = storedStopLoss;
             } else {
-                window.lastStopLoss = suggestedStopLoss;
+                storedStopLoss = stopLoss;
             }
-            
-            if (profitPercent >= 20 && suggestedStopLoss < avgPrice) {
-                suggestedStopLoss = avgPrice * 1.01;
-                tierDescription += ' (Breakeven Floor)';
-                window.lastStopLoss = suggestedStopLoss;
-            }
-            
+
+            // Display results
+            displayResults(profitPercent, stopLoss, avgPrice, currentPrice, profitPerContract, contracts, false);
+        }
+
+        function displayResults(profitPercent, stopLoss, avgPrice, currentPrice, profitPerContract, contracts, isLosing) {
+            // Update quick summary
             document.getElementById('quickProfitPercent').textContent = profitPercent.toFixed(1) + '%';
-            document.getElementById('quickStopLoss').textContent = '$' + suggestedStopLoss.toFixed(2);
+            document.getElementById('quickStopLoss').textContent = '$' + stopLoss.toFixed(2);
             
-            const stopLossPercent = ((suggestedStopLoss - avgPrice) / avgPrice) * 100;
+            const stopLossPercent = ((stopLoss - avgPrice) / avgPrice) * 100;
             
-            if (suggestedStopLoss < avgPrice) {
+            if (stopLoss < avgPrice || isLosing) {
                 const riskPercent = Math.abs(stopLossPercent);
                 document.getElementById('quickStopPercent').textContent = riskPercent.toFixed(1) + '%';
                 document.getElementById('stopPercentLabel').textContent = 'Risk %';
@@ -656,56 +634,76 @@
             
             document.getElementById('quickSummary').style.display = 'block';
             
+            // Build alert message
             let alertMessage = '';
             let alertClass = '';
             
-            if (profitPercent > 0) {
-                const lockedProfit = Math.max(0, suggestedStopLoss - avgPrice);
+            if (isLosing) {
+                const riskAmount = Math.abs(stopLoss - avgPrice);
+                if (profitPercent < 0) {
+                    alertMessage = `🔴 Position down ${Math.abs(profitPercent).toFixed(1)}%. Risk management stop at $${stopLoss.toFixed(2)} (Risk: $${(riskAmount * 100).toFixed(0)} per contract)`;
+                } else {
+                    alertMessage = `⚪ At breakeven. Risk management stop at $${stopLoss.toFixed(2)} (Risk: $${(riskAmount * 100).toFixed(0)} per contract)`;
+                }
+                alertClass = 'danger';
+            } else {
+                // Determine tier description
+                let tierDescription = getTierDescription(profitPercent);
+                
+                const lockedProfit = Math.max(0, stopLoss - avgPrice);
                 const lockedPercent = profitPerContract > 0 ? (lockedProfit / profitPerContract) * 100 : 0;
                 
-                alertMessage = '🎯 SET STOP LOSS AT $' + suggestedStopLoss.toFixed(2) + ' - You\'re up ' + profitPercent.toFixed(1) + '% (' + tierDescription + ')';
+                alertMessage = `🎯 SET STOP LOSS AT $${stopLoss.toFixed(2)} - You're up ${profitPercent.toFixed(1)}% (${tierDescription})`;
                 
                 if (lockedProfit > 0) {
-                    alertMessage += ' | Locking ' + lockedPercent.toFixed(0) + '% of gains ($' + (lockedProfit * 100).toFixed(0) + ' per contract)';
+                    alertMessage += ` | Locking ${lockedPercent.toFixed(0)}% of gains ($${(lockedProfit * 100).toFixed(0)} per contract)`;
                 }
                 
+                // Position scaling recommendations
                 if (contracts > 1) {
-                    let scalingMessage = '';
-                    
-                    if (profitPercent >= 30 && profitPercent <= 49) {
-                        const contractsToSell = Math.ceil(contracts * 0.25);
-                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (25%) - trend is forming, secure some gains';
-                    } else if (profitPercent >= 50 && profitPercent <= 74) {
-                        const contractsToSell = Math.ceil(contracts * 0.33);
-                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (33%) - solid momentum, lock core profits';
-                    } else if (profitPercent >= 75 && profitPercent <= 99) {
-                        const contractsToSell = Math.ceil(contracts * 0.25);
-                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (25%) - strong runner, prepare for tight trail';
-                    } else if (profitPercent >= 100 && profitPercent <= 149) {
-                        const contractsToSell = Math.ceil(contracts * 0.20);
-                        scalingMessage = '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (20%) - big profit zone, bank some life-changing money';
-                    } else if (profitPercent >= 150) {
-                        scalingMessage = '<br><br>📊 Trail remaining contracts ultra-tight - you\'re in legendary territory, let the winners run!';
+                    const scalingMessage = getScalingMessage(profitPercent, contracts);
+                    if (scalingMessage) {
+                        alertMessage += scalingMessage;
                     }
-                    
-                    alertMessage += scalingMessage;
                 }
                 
                 alertClass = 'success';
-            } else {
-                const riskAmount = Math.abs(suggestedStopLoss - avgPrice);
-                alertMessage = '🔴 Position down ' + Math.abs(profitPercent).toFixed(1) + '%. ' + tierDescription + ' stop at $' + suggestedStopLoss.toFixed(2) + ' (Risk: $' + (riskAmount * 100).toFixed(0) + ' per contract)';
-                alertClass = 'danger';
             }
             
-            lastCalculation = {
-                avgPrice: avgPrice,
-                currentPrice: currentPrice,
-                atrValue: atrValue,
-                contracts: contracts
-            };
-            
-            document.getElementById('alertMessage').innerHTML = '<div class="alert ' + alertClass + '">' + alertMessage + '</div>';
+            document.getElementById('alertMessage').innerHTML = `<div class="alert ${alertClass}">${alertMessage}</div>`;
+        }
+
+        function getTierDescription(profitPercent) {
+            if (profitPercent < 20) return '🔴 Risk Management';
+            if (profitPercent < 30) return '🟡 Early Lock';
+            if (profitPercent < 50) return '🟢 Growing Trend';
+            if (profitPercent < 75) return '🔵 Solid Momentum';
+            if (profitPercent < 100) return '🟣 Strong Runner';
+            if (profitPercent < 150) return '🟠 Big Profit Zone';
+            if (profitPercent < 200) return '🚀 Explosive Gains';
+            if (profitPercent < 300) return '💎 Diamond Tier';
+            if (profitPercent < 400) return '👑 God Tier';
+            if (profitPercent < 500) return '🐉 Ultra Tier';
+            return '🔒 Max Cap';
+        }
+
+        function getScalingMessage(profitPercent, contracts) {
+            if (profitPercent >= 30 && profitPercent <= 49) {
+                const contractsToSell = Math.ceil(contracts * 0.25);
+                return `<br><br>📊 Consider selling ${contractsToSell} contract${contractsToSell > 1 ? 's' : ''} (25%) - trend is forming, secure some gains`;
+            } else if (profitPercent >= 50 && profitPercent <= 74) {
+                const contractsToSell = Math.ceil(contracts * 0.33);
+                return `<br><br>📊 Consider selling ${contractsToSell} contract${contractsToSell > 1 ? 's' : ''} (33%) - solid momentum, lock core profits`;
+            } else if (profitPercent >= 75 && profitPercent <= 99) {
+                const contractsToSell = Math.ceil(contracts * 0.25);
+                return `<br><br>📊 Consider selling ${contractsToSell} contract${contractsToSell > 1 ? 's' : ''} (25%) - strong runner, prepare for tight trail`;
+            } else if (profitPercent >= 100 && profitPercent <= 149) {
+                const contractsToSell = Math.ceil(contracts * 0.20);
+                return `<br><br>📊 Consider selling ${contractsToSell} contract${contractsToSell > 1 ? 's' : ''} (20%) - big profit zone, bank some life-changing money`;
+            } else if (profitPercent >= 150) {
+                return `<br><br>📊 Trail remaining contracts ultra-tight - you're in legendary territory, let the winners run!`;
+            }
+            return '';
         }
     </script>
 </body>
