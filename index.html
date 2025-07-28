@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Option Stop Loss & Exit Manager</title>
+    <title>Enhanced Options Calculator</title>
     <style>
         * {
             margin: 0;
@@ -77,6 +77,12 @@
             border-color: #f59e0b;
         }
 
+        .dark-mode .alert.r-level {
+            background: #065f46;
+            color: #6ee7b7;
+            border-color: #059669;
+        }
+
         .dark-mode #quickSummary {
             background: #1f2937;
             border-left-color: #7c3aed;
@@ -91,6 +97,23 @@
         .dark-mode #targetDisplay {
             background: #064e3b;
             border-left-color: #10b981;
+        }
+
+        .dark-mode .r-level {
+            background: #1f2937;
+            border-color: #374151;
+        }
+
+        .dark-mode .r-level.achieved {
+            background: #064e3b;
+            border-color: #10b981;
+            color: #6ee7b7;
+        }
+
+        .dark-mode .r-level.current {
+            background: #78350f;
+            border-color: #f59e0b;
+            color: #fcd34d;
         }
 
         .theme-toggle {
@@ -172,6 +195,10 @@
             padding-bottom: 10px;
         }
 
+        .full-width-card {
+            grid-column: 1 / -1;
+        }
+
         .form-group {
             margin-bottom: 15px;
         }
@@ -242,6 +269,14 @@
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
 
+        .btn.secondary {
+            background: #28a745;
+        }
+
+        .btn.tertiary {
+            background: #6c757d;
+        }
+
         .alert {
             padding: 15px;
             border-radius: 10px;
@@ -266,6 +301,80 @@
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f1aeb5;
+        }
+
+        .alert.r-level {
+            background: #d1f2eb;
+            color: #0e6b5d;
+            border: 1px solid #7fddcc;
+            position: relative;
+        }
+
+        .dismiss-btn {
+            background: transparent;
+            border: 1px solid #0e6b5d;
+            color: #0e6b5d;
+            padding: 5px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .dismiss-btn:hover {
+            background: #0e6b5d;
+            color: white;
+        }
+
+        .r-targets-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .r-level {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .r-level.achieved {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+
+        .r-level.current {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+
+        .r-level-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .r-level-price {
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .r-level-profit {
+            font-size: 0.9em;
+            opacity: 0.8;
         }
 
         @media (max-width: 768px) {
@@ -301,6 +410,11 @@
             .btn {
                 margin-top: 10px;
             }
+
+            .r-targets-display {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
         }
     </style>
 </head>
@@ -309,7 +423,7 @@
     
     <div class="container">
         <div class="header">
-            <h1>Protect Your Profits</h1>
+            <h1>Elite Options Calculator</h1>
             <p>Never Let Green Turn Red</p>
         </div>
 
@@ -351,8 +465,9 @@
                         <select id="profitTargetPercent" onchange="calculateTarget()" style="flex: 1;">
                             <option value="">Select %</option>
                             <option value="25">25%</option>
-                            <option value="50">50%</option>
-                            <option value="100">100%</option>
+                            <option value="50">1R (50%)</option>
+                            <option value="100">2R (100%)</option>
+                            <option value="150">3R (150%)</option>
                             <option value="custom">Custom</option>
                         </select>
                         <input type="number" id="customPercent" placeholder="%" style="width: 80px; display: none;" onchange="calculateTarget()" min="1" max="500" inputmode="numeric">
@@ -373,7 +488,7 @@
                 <h2>Stop Loss Management</h2>
                 <div class="form-group">
                     <label for="currentPrice">Current Price ($)</label>
-                    <input type="number" id="currentPrice" step="0.01" min="0.01" placeholder="Will default to entry price" inputmode="decimal">
+                    <input type="number" id="currentPrice" step="0.01" min="0.01" placeholder="Will default to entry price" inputmode="decimal" onchange="updateRRDisplay()">
                 </div>
                 
                 <div class="form-group">
@@ -405,24 +520,99 @@
                 
                 <button type="button" class="btn" onclick="calculateStopLoss()" style="margin-top: 15px;">🔄 Update Stop Loss</button>
                 
-                <button type="button" class="btn" onclick="clearAll()" style="background: #6c757d; margin-top: 10px;">🗑️ Clear All</button>
+                <button type="button" class="btn tertiary" onclick="clearAll()" style="margin-top: 10px;">🗑️ Clear All</button>
+            </div>
+        </div>
+
+        <!-- R:R Take Profit Card -->
+        <div class="card full-width-card">
+            <h2>🎯 R:R Take Profit Targets</h2>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn secondary" onclick="highlight2R()" style="flex: 1;">⚡ Quick 2R Banking</button>
+                <button class="btn tertiary" onclick="resetRRDisplay()" style="flex: 1;">🔄 Reset R:R</button>
+            </div>
+            
+            <div id="rrSetupInfo" style="display: none; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px; border-left: 4px solid #667eea;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; text-align: center;">
+                    <div>
+                        <div style="font-weight: bold;">Entry Price</div>
+                        <div id="rrEntryPrice">$0.00</div>
+                    </div>
+                    <div>
+                        <div style="font-weight: bold;">Stop Loss</div>
+                        <div id="rrStopPrice">$0.00</div>
+                    </div>
+                    <div>
+                        <div style="font-weight: bold;">Risk (1R)</div>
+                        <div id="rrRiskAmount">$0.00</div>
+                    </div>
+                    <div>
+                        <div style="font-weight: bold;">Contracts</div>
+                        <div id="rrContracts">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="rrTargetsContainer" style="display: none;">
+                <div class="r-targets-display">
+                    <div class="r-level" id="r1Level">
+                        <div class="r-level-title">1R Target</div>
+                        <div class="r-level-price" id="r1Price">$0.00</div>
+                        <div class="r-level-profit" id="r1Profit">+$0 per contract</div>
+                    </div>
+                    
+                    <div class="r-level" id="r2Level">
+                        <div class="r-level-title">2R Banking 🎯</div>
+                        <div class="r-level-price" id="r2Price">$0.00</div>
+                        <div class="r-level-profit" id="r2Profit">+$0 per contract</div>
+                    </div>
+                    
+                    <div class="r-level" id="r3Level">
+                        <div class="r-level-title">3R Target</div>
+                        <div class="r-level-price" id="r3Price">$0.00</div>
+                        <div class="r-level-profit" id="r3Profit">+$0 per contract</div>
+                    </div>
+                    
+                    <div class="r-level" id="r5Level">
+                        <div class="r-level-title">5R Home Run</div>
+                        <div class="r-level-price" id="r5Price">$0.00</div>
+                        <div class="r-level-profit" id="r5Profit">+$0 per contract</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 10px; border-left: 4px solid #28a745;">
+                    <h3 style="color: #155724; margin-bottom: 10px;">💡 Simple R:R Strategy:</h3>
+                    <p style="color: #155724; margin-bottom: 5px;"><strong>1 contract:</strong> Hold until stop or exit at 2-3R</p>
+                    <p style="color: #155724;"><strong>2+ contracts:</strong> Sell half at 2R, trail the rest with house money</p>
+                </div>
+            </div>
+
+            <div id="rrNotReady" style="text-align: center; padding: 40px; color: #666;">
+                <div style="font-size: 3em; margin-bottom: 10px;">📊</div>
+                <div>Complete your trade setup above to see R:R targets</div>
             </div>
         </div>
 
         <div id="alertMessage" style="margin-top: 20px;"></div>
         
         <div style="text-align: center; margin-top: 40px; padding: 20px; color: rgba(255,255,255,0.8); font-size: 0.9em;">
-            🎯 Built by Christian | Never Let Profits Turn Into Losses
+            🎯 Enhanced by AI | Never Let Profits Turn Into Losses
         </div>
     </div>
 
     <script>
         let currentTradeType = 'day';
-        let storedStopLoss = null; // Clean never-lower tracking
+        let storedStopLoss = null;
+        let rrTargets = null;
+        let alertedLevels = { r1: false, r2: false, r3: false, r5: false };
         
         // Initialize
         window.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('avgPrice').focus();
+            const avgPriceInput = document.getElementById('avgPrice');
+            if (avgPriceInput) {
+                avgPriceInput.focus();
+            }
             
             // Enter key triggers calculation
             const inputs = document.querySelectorAll('input[type="number"]');
@@ -444,13 +634,26 @@
 
         function setTradeType(type) {
             currentTradeType = type;
-            document.querySelectorAll('.trade-type-btn').forEach(function(btn) {
+            
+            // Remove active class from all buttons
+            const buttons = document.querySelectorAll('.trade-type-btn');
+            buttons.forEach(function(btn) {
                 btn.classList.remove('active');
             });
-            event.target.classList.add('active');
             
-            const timeframe = type === 'day' ? '15m' : '1hr';
-            document.getElementById('atrTimeframe').textContent = timeframe;
+            // Add active class to clicked button
+            buttons.forEach(function(btn) {
+                if ((type === 'day' && btn.textContent.includes('Day')) || 
+                    (type === 'swing' && btn.textContent.includes('Swing'))) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            const timeframe = type === 'day' ? '15m' : '30m';
+            const timeframeEl = document.getElementById('atrTimeframe');
+            if (timeframeEl) {
+                timeframeEl.textContent = timeframe;
+            }
             
             if (navigator.vibrate) {
                 navigator.vibrate(30);
@@ -458,10 +661,17 @@
         }
 
         function calculateTarget() {
-            const avgPrice = parseFloat(document.getElementById('avgPrice').value) || 0;
-            const profitTargetPercent = document.getElementById('profitTargetPercent').value;
+            const avgPriceEl = document.getElementById('avgPrice');
+            const profitTargetPercentEl = document.getElementById('profitTargetPercent');
             const customPercentEl = document.getElementById('customPercent');
             const targetDisplay = document.getElementById('targetDisplay');
+            
+            if (!avgPriceEl || !profitTargetPercentEl || !customPercentEl || !targetDisplay) {
+                return;
+            }
+            
+            const avgPrice = parseFloat(avgPriceEl.value) || 0;
+            const profitTargetPercent = profitTargetPercentEl.value;
             
             if (profitTargetPercent === 'custom') {
                 customPercentEl.style.display = 'block';
@@ -485,44 +695,335 @@
             const targetPrice = avgPrice * (1 + percentValue / 100);
             const profitPerContract = (targetPrice - avgPrice) * 100;
             
-            document.getElementById('targetPrice').textContent = '$' + targetPrice.toFixed(2);
-            document.getElementById('targetPercent').textContent = '+' + percentValue + '%';
-            document.getElementById('profitPerContract').textContent = '$' + profitPerContract.toFixed(0);
+            const targetPriceEl = document.getElementById('targetPrice');
+            const targetPercentEl = document.getElementById('targetPercent');
+            const profitPerContractEl = document.getElementById('profitPerContract');
+            
+            if (targetPriceEl) targetPriceEl.textContent = '$' + targetPrice.toFixed(2);
+            if (targetPercentEl) targetPercentEl.textContent = '+' + percentValue + '%';
+            if (profitPerContractEl) profitPerContractEl.textContent = '$' + profitPerContract.toFixed(0);
             
             targetDisplay.style.display = 'block';
         }
 
         function defaultCurrentPrice() {
-            const avgPrice = document.getElementById('avgPrice').value;
+            const avgPriceEl = document.getElementById('avgPrice');
             const currentPriceField = document.getElementById('currentPrice');
+            
+            if (!avgPriceEl || !currentPriceField) {
+                return;
+            }
+            
+            const avgPrice = avgPriceEl.value;
             
             if (avgPrice && !currentPriceField.value) {
                 currentPriceField.value = avgPrice;
             }
             
             calculateTarget();
+            updateRRDisplay();
+        }
+
+        function calculateRRTargets(entryPrice, stopLoss) {
+            const risk = Math.abs(entryPrice - stopLoss);
+            return {
+                r1: entryPrice + risk,
+                r2: entryPrice + (risk * 2),
+                r3: entryPrice + (risk * 3),
+                r5: entryPrice + (risk * 5),
+                risk: risk
+            };
+        }
+
+        function updateRRDisplay() {
+            const avgPriceEl = document.getElementById('avgPrice');
+            const currentPriceEl = document.getElementById('currentPrice');
+            const contractsEl = document.getElementById('contracts');
+            
+            if (!avgPriceEl || !currentPriceEl || !contractsEl) {
+                return;
+            }
+            
+            const avgPrice = parseFloat(avgPriceEl.value) || 0;
+            const currentPrice = parseFloat(currentPriceEl.value) || 0;
+            const contracts = parseInt(contractsEl.value) || 1;
+            
+            const rrTargetsContainer = document.getElementById('rrTargetsContainer');
+            const rrSetupInfo = document.getElementById('rrSetupInfo');
+            const rrNotReady = document.getElementById('rrNotReady');
+            
+            if (!avgPrice || !rrTargetsContainer || !rrSetupInfo || !rrNotReady) {
+                if (rrTargetsContainer) rrTargetsContainer.style.display = 'none';
+                if (rrSetupInfo) rrSetupInfo.style.display = 'none';
+                if (rrNotReady) rrNotReady.style.display = 'block';
+                return;
+            }
+
+            // Calculate temporary stop loss for R:R display
+            const deltaEl = document.getElementById('delta');
+            const atrEl = document.getElementById('atrValue');
+            
+            const delta = parseFloat(deltaEl ? deltaEl.value : '') || 0.3;
+            const atr = parseFloat(atrEl ? atrEl.value : '') || 0.15;
+            const optionATR = atr * delta;
+            
+            // Enhanced initial stop calculation
+            const initialStop = Math.max(
+                avgPrice - (optionATR * 1.3), // Enhanced vs original 1.0x
+                avgPrice * 0.80 // Never more than 20% risk
+            );
+
+            rrTargets = calculateRRTargets(avgPrice, initialStop);
+            
+            // Update setup info elements
+            const elements = {
+                rrEntryPrice: '$' + avgPrice.toFixed(2),
+                rrStopPrice: '$' + initialStop.toFixed(2),
+                rrRiskAmount: '$' + rrTargets.risk.toFixed(2),
+                rrContracts: contracts.toString()
+            };
+            
+            Object.keys(elements).forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = elements[id];
+                }
+            });
+            
+            // Update R level displays
+            const rLevelUpdates = [
+                { id: 'r1Price', value: ' + rrTargets.r1.toFixed(2) },
+                { id: 'r1Profit', value: '+ + (rrTargets.risk * 100).toFixed(0) + ' per contract' },
+                { id: 'r2Price', value: ' + rrTargets.r2.toFixed(2) },
+                { id: 'r2Profit', value: '+ + (rrTargets.risk * 2 * 100).toFixed(0) + ' per contract' },
+                { id: 'r3Price', value: ' + rrTargets.r3.toFixed(2) },
+                { id: 'r3Profit', value: '+ + (rrTargets.risk * 3 * 100).toFixed(0) + ' per contract' },
+                { id: 'r5Price', value: ' + rrTargets.r5.toFixed(2) },
+                { id: 'r5Profit', value: '+ + (rrTargets.risk * 5 * 100).toFixed(0) + ' per contract' }
+            ];
+            
+            rLevelUpdates.forEach(function(update) {
+                const element = document.getElementById(update.id);
+                if (element) {
+                    element.textContent = update.value;
+                }
+            });
+            
+            // Show R:R section
+            rrTargetsContainer.style.display = 'block';
+            rrSetupInfo.style.display = 'block';
+            rrNotReady.style.display = 'none';
+            
+            // Check for R level achievements
+            if (currentPrice > 0 && rrTargets) {
+                checkRLevelAlerts(currentPrice);
+                updateRLevelStyles(currentPrice);
+            }
+        }
+
+        function checkRLevelAlerts(currentPrice) {
+            if (!rrTargets) return;
+            
+            if (currentPrice >= rrTargets.r5 && !alertedLevels.r5) {
+                showRLevelAlert('5R', rrTargets.r5, rrTargets.risk * 5);
+                alertedLevels.r5 = true;
+            } else if (currentPrice >= rrTargets.r3 && !alertedLevels.r3) {
+                showRLevelAlert('3R', rrTargets.r3, rrTargets.risk * 3);
+                alertedLevels.r3 = true;
+            } else if (currentPrice >= rrTargets.r2 && !alertedLevels.r2) {
+                showRLevelAlert('2R', rrTargets.r2, rrTargets.risk * 2);
+                alertedLevels.r2 = true;
+            } else if (currentPrice >= rrTargets.r1 && !alertedLevels.r1) {
+                showRLevelAlert('1R', rrTargets.r1, rrTargets.risk);
+                alertedLevels.r1 = true;
+            }
+        }
+
+        function showRLevelAlert(level, price, profit) {
+            let message, suggestion;
+            
+            switch(level) {
+                case '1R':
+                    message = '🎯 1R TARGET HIT! ( + price.toFixed(2) + ' reached)';
+                    suggestion = '💰 Profit:  + (profit * 100).toFixed(0) + ' per contract<br>✅ Trade is working - stay disciplined with stops';
+                    break;
+                case '2R':
+                    message = '🎉 2R BANKING LEVEL HIT! ( + price.toFixed(2) + ' reached)';
+                    suggestion = '💰 Profit:  + (profit * 100).toFixed(0) + ' per contract<br>💡 Consider selling 1 contract, trail 1 with house money';
+                    break;
+                case '3R':
+                    message = '🚀 3R TARGET SMASHED! ( + price.toFixed(2) + ' reached)';
+                    suggestion = '💰 Profit:  + (profit * 100).toFixed(0) + ' per contract<br>🔥 Strong momentum - trail remaining contracts tight';
+                    break;
+                case '5R':
+                    message = '💎 5R LEGENDARY STATUS! ( + price.toFixed(2) + ' reached)';
+                    suggestion = '💰 Profit:  + (profit * 100).toFixed(0) + ' per contract<br>👑 You\'re in elite territory - let winners run!';
+                    break;
+            }
+            
+            const alertMessageEl = document.getElementById('alertMessage');
+            if (alertMessageEl) {
+                alertMessageEl.innerHTML = '<div class="alert r-level">' + message + '<br>' + suggestion + '<button class="dismiss-btn" onclick="dismissRAlert()">Got It</button></div>';
+            }
+        }
+
+        function dismissRAlert() {
+            // Check if we have enough data to show normal stop loss alert
+            const avgPriceEl = document.getElementById('avgPrice');
+            const currentPriceEl = document.getElementById('currentPrice');
+            
+            const avgPrice = parseFloat(avgPriceEl ? avgPriceEl.value : '') || 0;
+            const currentPrice = parseFloat(currentPriceEl ? currentPriceEl.value : '') || 0;
+            
+            if (avgPrice && currentPrice) {
+                calculateStopLoss(); // Return to normal stop loss alert
+            } else {
+                const alertMessageEl = document.getElementById('alertMessage');
+                if (alertMessageEl) {
+                    alertMessageEl.innerHTML = '';
+                }
+            }
+        }
+
+        function updateRLevelStyles(currentPrice) {
+            if (!rrTargets) return;
+            
+            // Reset all levels first
+            const levelIds = ['r1Level', 'r2Level', 'r3Level', 'r5Level'];
+            levelIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.classList.remove('achieved', 'current');
+                }
+            });
+            
+            // Mark achieved levels
+            if (currentPrice >= rrTargets.r5) {
+                const achievedIds = ['r5Level', 'r3Level', 'r2Level', 'r1Level'];
+                achievedIds.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('achieved');
+                });
+            } else if (currentPrice >= rrTargets.r3) {
+                const achievedIds = ['r3Level', 'r2Level', 'r1Level'];
+                achievedIds.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('achieved');
+                });
+                const r5El = document.getElementById('r5Level');
+                if (r5El) r5El.classList.add('current');
+            } else if (currentPrice >= rrTargets.r2) {
+                const achievedIds = ['r2Level', 'r1Level'];
+                achievedIds.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.classList.add('achieved');
+                });
+                const r3El = document.getElementById('r3Level');
+                if (r3El) r3El.classList.add('current');
+            } else if (currentPrice >= rrTargets.r1) {
+                const r1El = document.getElementById('r1Level');
+                if (r1El) r1El.classList.add('achieved');
+                const r2El = document.getElementById('r2Level');
+                if (r2El) r2El.classList.add('current');
+            } else {
+                const r1El = document.getElementById('r1Level');
+                if (r1El) r1El.classList.add('current');
+            }
+        }
+
+        function highlight2R() {
+            if (rrTargets) {
+                const r2Element = document.getElementById('r2Level');
+                if (r2Element) {
+                    r2Element.style.backgroundColor = '#fff3cd';
+                    r2Element.style.borderColor = '#ffc107';
+                    setTimeout(() => {
+                        const currentPriceEl = document.getElementById('currentPrice');
+                        const currentPrice = parseFloat(currentPriceEl ? currentPriceEl.value : '') || 0;
+                        updateRLevelStyles(currentPrice);
+                    }, 2000);
+                }
+            }
+        }
+
+        function resetRRDisplay() {
+            alertedLevels = { r1: false, r2: false, r3: false, r5: false };
+            
+            // Reset R level styles
+            const rLevels = ['r1Level', 'r2Level', 'r3Level', 'r5Level'];
+            rLevels.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.classList.remove('achieved', 'current');
+                    element.style.backgroundColor = '';
+                    element.style.borderColor = '';
+                }
+            });
+            
+            updateRRDisplay();
+            const alertMessageEl = document.getElementById('alertMessage');
+            if (alertMessageEl) {
+                alertMessageEl.innerHTML = '';
+            }
         }
         
         function clearAll() {
             // Reset all inputs
-            document.getElementById('avgPrice').value = '';
-            document.getElementById('currentPrice').value = '';
-            document.getElementById('atrValue').value = '';
-            document.getElementById('delta').value = '';
-            document.getElementById('profitTargetPercent').value = '';
-            document.getElementById('customPercent').value = '';
-            document.getElementById('customPercent').style.display = 'none';
-            document.getElementById('contracts').value = '1';
+            const inputs = {
+                avgPrice: '',
+                currentPrice: '',
+                atrValue: '',
+                delta: '',
+                profitTargetPercent: '',
+                customPercent: '',
+                contracts: '1'
+            };
+            
+            Object.keys(inputs).forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.value = inputs[id];
+                }
+            });
+            
+            // Hide custom percent input
+            const customPercentEl = document.getElementById('customPercent');
+            if (customPercentEl) {
+                customPercentEl.style.display = 'none';
+            }
             
             // Hide displays
-            document.getElementById('targetDisplay').style.display = 'none';
-            document.getElementById('quickSummary').style.display = 'none';
-            document.getElementById('alertMessage').innerHTML = '';
+            const hideElements = ['targetDisplay', 'quickSummary'];
+            hideElements.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.style.display = 'none';
+                }
+            });
             
-            // Reset stop loss tracking
+            const alertMessageEl = document.getElementById('alertMessage');
+            if (alertMessageEl) {
+                alertMessageEl.innerHTML = '';
+            }
+            
+            // Reset R:R display
+            const rrTargetsContainer = document.getElementById('rrTargetsContainer');
+            const rrSetupInfo = document.getElementById('rrSetupInfo');
+            const rrNotReady = document.getElementById('rrNotReady');
+            
+            if (rrTargetsContainer) rrTargetsContainer.style.display = 'none';
+            if (rrSetupInfo) rrSetupInfo.style.display = 'none';
+            if (rrNotReady) rrNotReady.style.display = 'block';
+            
+            // Reset tracking variables
             storedStopLoss = null;
+            rrTargets = null;
+            alertedLevels = { r1: false, r2: false, r3: false, r5: false };
             
-            document.getElementById('avgPrice').focus();
+            const avgPriceEl = document.getElementById('avgPrice');
+            if (avgPriceEl) {
+                avgPriceEl.focus();
+            }
             
             if (navigator.vibrate) {
                 navigator.vibrate(50);
@@ -530,21 +1031,41 @@
         }
 
         function calculateStopLoss() {
-            // Get all inputs
-            const avgPrice = parseFloat(document.getElementById('avgPrice').value) || 0;
-            const currentPrice = parseFloat(document.getElementById('currentPrice').value) || 0;
-            const stockATR = parseFloat(document.getElementById('atrValue').value) || 0;
-            const delta = parseFloat(document.getElementById('delta').value) || 0;
-            const contracts = parseInt(document.getElementById('contracts').value) || 1;
+            // Get all inputs with null checks
+            const avgPriceEl = document.getElementById('avgPrice');
+            const currentPriceEl = document.getElementById('currentPrice');
+            const stockATREl = document.getElementById('atrValue');
+            const deltaEl = document.getElementById('delta');
+            const contractsEl = document.getElementById('contracts');
+            
+            if (!avgPriceEl || !currentPriceEl || !stockATREl || !deltaEl || !contractsEl) {
+                const alertMessageEl = document.getElementById('alertMessage');
+                if (alertMessageEl) {
+                    alertMessageEl.innerHTML = '<div class="alert warning">Required form elements not found.</div>';
+                }
+                return;
+            }
+            
+            const avgPrice = parseFloat(avgPriceEl.value) || 0;
+            const currentPrice = parseFloat(currentPriceEl.value) || 0;
+            const stockATR = parseFloat(stockATREl.value) || 0;
+            const delta = parseFloat(deltaEl.value) || 0;
+            const contracts = parseInt(contractsEl.value) || 1;
 
             // Input validation
             if (!avgPrice || !currentPrice || !stockATR || !delta) {
-                document.getElementById('alertMessage').innerHTML = '<div class="alert warning">Please fill in all required fields (Average Price, Current Price, Delta, Stock ATR).</div>';
+                const alertMessageEl = document.getElementById('alertMessage');
+                if (alertMessageEl) {
+                    alertMessageEl.innerHTML = '<div class="alert warning">Please fill in all required fields (Average Price, Current Price, Delta, Stock ATR).</div>';
+                }
                 return;
             }
 
             if (avgPrice <= 0 || currentPrice <= 0 || stockATR <= 0 || delta <= 0) {
-                document.getElementById('alertMessage').innerHTML = '<div class="alert warning">All values must be greater than zero.</div>';
+                const alertMessageEl = document.getElementById('alertMessage');
+                if (alertMessageEl) {
+                    alertMessageEl.innerHTML = '<div class="alert warning">All values must be greater than zero.</div>';
+                }
                 return;
             }
 
@@ -556,83 +1077,110 @@
             // Handle losing/breakeven trades
             if (profitPerContract <= 0) {
                 storedStopLoss = null; // Reset never-lower tracking
-                const stopLoss = currentPrice - (optionATR * 1.0);
+                // Enhanced initial stop calculation (1.3x vs original 1.0x)
+                const basicStop = currentPrice - (optionATR * 1.3);
+                const maxRiskStop = avgPrice * 0.80; // 20% max risk
+                const stopLoss = Math.max(basicStop, maxRiskStop);
+                
                 displayResults(profitPercent, stopLoss, avgPrice, currentPrice, profitPerContract, contracts, true);
                 return;
             }
 
-            // NEW SYSTEM: Calculate stop loss using exponential curve
+            // ENHANCED STOP LOSS SYSTEM
             
-            // 1. EXPONENTIAL LOCK CURVE
+            // 1. EXPONENTIAL LOCK CURVE (keep original - it's brilliant)
             const lockFactor = Math.min(0.95, 1 - Math.exp(-profitPercent / 80));
             const profitLock = avgPrice + (profitPerContract * lockFactor);
             
-            // 2. TIGHTER ATR MULTIPLIERS
+            // 2. ENHANCED ATR MULTIPLIERS (less aggressive than original)
             let atrMultiplier;
-            if (profitPercent < 20) {
+            if (profitPercent < 25) {
                 atrMultiplier = 1.0;
-            } else if (profitPercent < 30) {
-                atrMultiplier = 0.8;
             } else if (profitPercent < 50) {
-                atrMultiplier = 0.7;
-            } else if (profitPercent < 75) {
-                atrMultiplier = 0.6;
+                atrMultiplier = 0.8;
             } else if (profitPercent < 100) {
-                atrMultiplier = 0.5;
-            } else if (profitPercent < 150) {
-                atrMultiplier = 0.4;
+                atrMultiplier = 0.6;
             } else if (profitPercent < 200) {
-                atrMultiplier = 0.3;
+                atrMultiplier = 0.4;
             } else if (profitPercent < 300) {
-                atrMultiplier = 0.2;
-            } else if (profitPercent < 400) {
-                atrMultiplier = 0.12;
+                atrMultiplier = 0.25;   // Less aggressive than original 0.2
+            } else if (profitPercent < 500) {
+                atrMultiplier = 0.15;   // Less aggressive than original 0.12
             } else {
-                atrMultiplier = 0.04;
+                atrMultiplier = 0.08;   // Less aggressive than original 0.04
             }
             
             const atrTrail = currentPrice - (optionATR * atrMultiplier);
             
-            // 3. MAX GIVEBACK PROTECTION
-            const maxGiveback = currentPrice - (profitPerContract * 0.4);
+            // 3. ENHANCED MAX GIVEBACK PROTECTION (20% vs original 40%)
+            const maxGiveback = currentPrice - (profitPerContract * 0.20);
             
             // 4. CALCULATE INITIAL STOP
             let stopLoss = Math.max(profitLock, atrTrail, maxGiveback);
             
-            // 5. EARLY BREAKEVEN PROTECTION (15% trigger with 5% buffer)
-            if (profitPercent >= 15) {
-                const breakevenFloor = avgPrice * 1.05;
+            // 5. NEW: MINIMUM BUFFER PROTECTION
+            let minimumBuffer;
+            if (profitPercent < 30) {
+                minimumBuffer = currentPrice * 0.06;  // 6% minimum
+            } else if (profitPercent < 75) {
+                minimumBuffer = currentPrice * 0.04;  // 4% minimum
+            } else if (profitPercent < 150) {
+                minimumBuffer = currentPrice * 0.03;  // 3% minimum
+            } else {
+                minimumBuffer = currentPrice * 0.02;  // 2% minimum
+            }
+            
+            // Enhanced buffer for high volatility
+            const atrBuffer = optionATR * 1.5;
+            const finalBuffer = Math.max(minimumBuffer, atrBuffer);
+            
+            // Never set stop closer than minimum buffer
+            const bufferProtectedStop = currentPrice - finalBuffer;
+            stopLoss = Math.min(stopLoss, bufferProtectedStop);
+            
+            // 6. ENHANCED BREAKEVEN PROTECTION (30% trigger vs original 15%, 2% buffer vs original 5%)
+            if (profitPercent >= 30) {
+                const breakevenFloor = avgPrice * 1.02;
                 stopLoss = Math.max(stopLoss, breakevenFloor);
             }
             
-            // 6. NEVER-LOWER RULE (applied last)
+            // 7. NEVER-LOWER RULE (keep original logic - it's perfect)
             if (storedStopLoss && stopLoss < storedStopLoss) {
                 stopLoss = storedStopLoss;
             } else {
                 storedStopLoss = stopLoss;
             }
 
-            // Display results
+            // Display results and check R levels
             displayResults(profitPercent, stopLoss, avgPrice, currentPrice, profitPerContract, contracts, false);
+            
+            // Update R:R display and check for alerts
+            updateRRDisplay();
         }
 
         function displayResults(profitPercent, stopLoss, avgPrice, currentPrice, profitPerContract, contracts, isLosing) {
-            // Update quick summary
-            document.getElementById('quickProfitPercent').textContent = profitPercent.toFixed(1) + '%';
-            document.getElementById('quickStopLoss').textContent = '$' + stopLoss.toFixed(2);
+            // Update quick summary with null checks
+            const quickProfitPercentEl = document.getElementById('quickProfitPercent');
+            const quickStopLossEl = document.getElementById('quickStopLoss');
+            const quickStopPercentEl = document.getElementById('quickStopPercent');
+            const stopPercentLabelEl = document.getElementById('stopPercentLabel');
+            const quickSummaryEl = document.getElementById('quickSummary');
+            
+            if (quickProfitPercentEl) quickProfitPercentEl.textContent = profitPercent.toFixed(1) + '%';
+            if (quickStopLossEl) quickStopLossEl.textContent = ' + stopLoss.toFixed(2);
             
             const stopLossPercent = ((stopLoss - avgPrice) / avgPrice) * 100;
             
             if (stopLoss < avgPrice || isLosing) {
                 const riskPercent = Math.abs(stopLossPercent);
-                document.getElementById('quickStopPercent').textContent = riskPercent.toFixed(1) + '%';
-                document.getElementById('stopPercentLabel').textContent = 'Risk %';
+                if (quickStopPercentEl) quickStopPercentEl.textContent = riskPercent.toFixed(1) + '%';
+                if (stopPercentLabelEl) stopPercentLabelEl.textContent = 'Risk %';
             } else {
-                document.getElementById('quickStopPercent').textContent = stopLossPercent.toFixed(1) + '%';
-                document.getElementById('stopPercentLabel').textContent = 'Locked Profit %';
+                if (quickStopPercentEl) quickStopPercentEl.textContent = stopLossPercent.toFixed(1) + '%';
+                if (stopPercentLabelEl) stopPercentLabelEl.textContent = 'Locked Profit %';
             }
             
-            document.getElementById('quickSummary').style.display = 'block';
+            if (quickSummaryEl) quickSummaryEl.style.display = 'block';
             
             // Build alert message
             let alertMessage = '';
@@ -641,9 +1189,9 @@
             if (isLosing) {
                 const riskAmount = Math.abs(stopLoss - avgPrice);
                 if (profitPercent < 0) {
-                    alertMessage = `🔴 Position down ${Math.abs(profitPercent).toFixed(1)}%. Risk management stop at $${stopLoss.toFixed(2)} (Risk: $${(riskAmount * 100).toFixed(0)} per contract)`;
+                    alertMessage = '🔴 Position down ' + Math.abs(profitPercent).toFixed(1) + '%. Enhanced risk management stop at  + stopLoss.toFixed(2) + ' (Risk:  + (riskAmount * 100).toFixed(0) + ' per contract)';
                 } else {
-                    alertMessage = `⚪ At breakeven. Risk management stop at $${stopLoss.toFixed(2)} (Risk: $${(riskAmount * 100).toFixed(0)} per contract)`;
+                    alertMessage = '⚪ At breakeven. Enhanced risk management stop at  + stopLoss.toFixed(2) + ' (Risk:  + (riskAmount * 100).toFixed(0) + ' per contract)';
                 }
                 alertClass = 'danger';
             } else {
@@ -653,10 +1201,10 @@
                 const lockedProfit = Math.max(0, stopLoss - avgPrice);
                 const lockedPercent = profitPerContract > 0 ? (lockedProfit / profitPerContract) * 100 : 0;
                 
-                alertMessage = `🎯 SET STOP LOSS AT $${stopLoss.toFixed(2)} - You're up ${profitPercent.toFixed(1)}% (${tierDescription})`;
+                alertMessage = '🎯 SET STOP LOSS AT  + stopLoss.toFixed(2) + ' - You\'re up ' + profitPercent.toFixed(1) + '% (' + tierDescription + ')';
                 
                 if (lockedProfit > 0) {
-                    alertMessage += ` | Locking ${lockedPercent.toFixed(0)}% of gains ($${(lockedProfit * 100).toFixed(0)} per contract)`;
+                    alertMessage += ' | Locking ' + lockedPercent.toFixed(0) + '% of gains ( + (lockedProfit * 100).toFixed(0) + ' per contract)';
                 }
                 
                 // Position scaling recommendations
@@ -670,7 +1218,10 @@
                 alertClass = 'success';
             }
             
-            document.getElementById('alertMessage').innerHTML = `<div class="alert ${alertClass}">${alertMessage}</div>`;
+            const alertMessageEl = document.getElementById('alertMessage');
+            if (alertMessageEl) {
+                alertMessageEl.innerHTML = '<div class="alert ' + alertClass + '">' + alertMessage + '</div>';
+            }
         }
 
         function getTierDescription(profitPercent) {
@@ -690,18 +1241,18 @@
         function getScalingMessage(profitPercent, contracts) {
             if (profitPercent >= 30 && profitPercent <= 49) {
                 const contractsToSell = Math.ceil(contracts * 0.25);
-                return `<br><br>📊 Consider selling ${contractsToSell} contract${contractsToSell > 1 ? 's' : ''} (25%) - trend is forming, secure some gains`;
+                return '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (25%) - trend is forming, secure some gains';
             } else if (profitPercent >= 50 && profitPercent <= 74) {
                 const contractsToSell = Math.ceil(contracts * 0.33);
-                return `<br><br>📊 Consider selling ${contractsToSell} contract${contractsToSell > 1 ? 's' : ''} (33%) - solid momentum, lock core profits`;
+                return '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (33%) - solid momentum, lock core profits';
             } else if (profitPercent >= 75 && profitPercent <= 99) {
                 const contractsToSell = Math.ceil(contracts * 0.25);
-                return `<br><br>📊 Consider selling ${contractsToSell} contract${contractsToSell > 1 ? 's' : ''} (25%) - strong runner, prepare for tight trail`;
+                return '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (25%) - strong runner, prepare for tight trail';
             } else if (profitPercent >= 100 && profitPercent <= 149) {
                 const contractsToSell = Math.ceil(contracts * 0.20);
-                return `<br><br>📊 Consider selling ${contractsToSell} contract${contractsToSell > 1 ? 's' : ''} (20%) - big profit zone, bank some life-changing money`;
+                return '<br><br>📊 Consider selling ' + contractsToSell + ' contract' + (contractsToSell > 1 ? 's' : '') + ' (20%) - big profit zone, bank some life-changing money';
             } else if (profitPercent >= 150) {
-                return `<br><br>📊 Trail remaining contracts ultra-tight - you're in legendary territory, let the winners run!`;
+                return '<br><br>📊 Trail remaining contracts ultra-tight - you\'re in legendary territory, let the winners run!';
             }
             return '';
         }
