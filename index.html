@@ -121,6 +121,16 @@
             font-weight: 700;
             transition: color 0.3s ease;
         }
+        
+        .value.positive {
+            color: var(--accent-green);
+            text-shadow: 0 0 8px rgba(0, 255, 0, 0.5);
+        }
+        .value.negative {
+            color: var(--accent-red);
+            text-shadow: 0 0 8px rgba(255, 59, 59, 0.5);
+        }
+
 
         .main-content {
             display: flex;
@@ -138,8 +148,8 @@
             transition: transform 0.3s ease, background 0.4s ease;
             backdrop-filter: blur(20px);
             border: 1px solid rgba(255,255,255,0.1);
-            flex: 1 1 calc(50% - 12.5px); /* Default for desktop */
-            min-width: 0; /* Prevents flexbox overflow */
+            flex: 1 1 calc(50% - 12.5px);
+            min-width: 0;
         }
         
         .dark-mode .card {
@@ -330,7 +340,7 @@
         
         /* --- R:R Section Specifics --- */
         .rr-card {
-            flex: 1 1 100%; /* Make it full width */
+            flex: 1 1 100%;
         }
         
         .rr-targets {
@@ -426,19 +436,17 @@
                 flex-basis: 100%;
              }
              #desktop-dashboard {
-                display: none; /* Hide top dashboard on smallest screens */
+                display: none;
              }
              .in-card-dashboard {
-                display: grid; /* Show the in-card version */
+                display: grid;
              }
         }
 
-        /* NEW: In-card dashboard for mobile */
         .in-card-dashboard {
-            display: none; /* Hidden by default */
+            display: none;
         }
         
-        /* NEW: Fix for mobile dashboard text color */
         .in-card-dashboard .dashboard-metric {
             color: var(--text-dark);
         }
@@ -448,11 +456,21 @@
         .in-card-dashboard .dashboard-metric .label {
             opacity: 0.7;
         }
+        
+        .mobile-dash-separator {
+            border: 0;
+            height: 1px;
+            background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0));
+            margin: 20px 0;
+        }
+        .dark-mode .mobile-dash-separator {
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0));
+        }
 
 
     </style>
 </head>
-<body>
+<body class="dark-mode">
     <canvas id="matrix-bg"></canvas>
     <button class="theme-toggle" id="themeToggle">🌓</button>
     
@@ -462,7 +480,6 @@
             <p>Never Let Green Turn Red</p>
         </header>
 
-        <!-- This dashboard is now primarily for DESKTOP -->
         <section class="dashboard" id="desktop-dashboard">
             <div class="dashboard-metric">
                 <div class="label">Profit %</div>
@@ -484,8 +501,8 @@
                 <div class="form-group">
                     <label>Trade Type</label>
                     <div class="toggle-group" id="tradeTypeToggle">
-                        <button class="toggle-btn active" data-type="day">Day Trade</button>
-                        <button class="toggle-btn" data-type="swing">Swing Trade</button>
+                        <button class="toggle-btn" data-type="day">Day Trade</button>
+                        <button class="toggle-btn active" data-type="swing">Swing Trade</button>
                     </div>
                 </div>
                 <div class="form-group">
@@ -520,11 +537,12 @@
                     <input type="number" id="delta" step="0.01" min="0.01" max="1.00" placeholder="0.35" inputmode="decimal">
                 </div>
                 <div class="form-group">
-                    <label for="atrValue">Stock ATR (<span id="atrTimeframe">15m</span>)</label>
+                    <label for="atrValue">Stock ATR (<span id="atrTimeframe">1hr</span>)</label>
                     <input type="number" id="atrValue" step="0.01" min="0.01" placeholder="1.25" inputmode="decimal">
                 </div>
 
-                <!-- NEW: This is the in-card dashboard for MOBILE -->
+                <hr class="mobile-dash-separator">
+
                 <section class="dashboard in-card-dashboard" id="mobile-dashboard">
                      <div class="dashboard-metric">
                         <div class="label">Profit %</div>
@@ -559,7 +577,7 @@
         <div id="alertMessage" style="min-height: 60px;"></div>
 
         <div style="display: flex; gap: 15px; margin-top: 20px;">
-            <button type="button" class="btn" id="calculateBtn">Calculate Stop Loss</button>
+            <button type="button" class="btn" id="calculateBtn">Force Recalculate</button>
             <button type="button" class="btn tertiary" id="clearBtn">Clear All</button>
         </div>
         
@@ -642,7 +660,7 @@
 
             // --- State Management ---
             let state = {
-                tradeType: 'day',
+                tradeType: 'swing',
                 riskProfile: 'balanced',
                 storedStopLoss: null,
                 achievedRLevels: { r1: false, r2: false, r3: false, r5: false }
@@ -652,13 +670,27 @@
 
             // --- Event Listeners ---
             themeToggle.addEventListener('click', toggleTheme);
-            calculateBtn.addEventListener('click', runCalculations);
+            
+            calculateBtn.addEventListener('click', () => {
+                state.storedStopLoss = null;
+                runCalculations();
+                saveState();
+            });
+
             clearBtn.addEventListener('click', clearAll);
             
             tradeTypeToggle.addEventListener('click', (e) => handleToggle(e, 'tradeType', setAtrTimeframe));
             riskProfileToggle.addEventListener('click', (e) => handleToggle(e, 'riskProfile'));
             
-            [avgPriceEl, currentPriceEl, deltaEl, atrValueEl, contractsEl].forEach(el => {
+            // Special listener for Entry Price to auto-fill Current Price
+            avgPriceEl.addEventListener('input', () => {
+                currentPriceEl.value = avgPriceEl.value;
+                runCalculations();
+                saveState();
+            });
+
+            // Generic listeners for other fields
+            [currentPriceEl, deltaEl, atrValueEl, contractsEl].forEach(el => {
                 el.addEventListener('input', () => {
                     runCalculations();
                     saveState();
@@ -668,6 +700,7 @@
             // --- Functions ---
             function toggleTheme() {
                 document.body.classList.toggle('dark-mode');
+                localStorage.setItem('tradingMatrixTheme', document.body.classList.contains('dark-mode') ? 'dark' : 'light');
             }
 
             function handleToggle(e, stateKey, callback) {
@@ -749,7 +782,12 @@
                      return null;
                 }
                 
-                alertMessageEl.innerHTML = '';
+                if (currentPrice > avgPrice * 6) { // 500% profit sanity check
+                    alertMessageEl.innerHTML = `<div class="alert warning">⚠️ Extreme profit detected. Please verify inputs are correct.</div>`;
+                } else {
+                    alertMessageEl.innerHTML = '';
+                }
+
                 return { avgPrice, currentPrice, delta, stockATR, contracts };
             }
 
@@ -768,14 +806,13 @@
                 const profitPerContract = currentPrice - avgPrice;
                 const profitPercent = avgPrice > 0 ? (profitPerContract / avgPrice) * 100 : 0;
 
-                // --- Initial Stop for Losing/Breakeven Trades ---
                 if (profitPerContract <= 0) {
-                    state.storedStopLoss = null; // Reset trailing stop
+                    state.storedStopLoss = null;
                     let maxRiskPercent;
                     switch(state.riskProfile) {
-                        case 'conservative': maxRiskPercent = 0.88; break; // 12%
-                        case 'aggressive': maxRiskPercent = 0.82; break; // 18%
-                        default: maxRiskPercent = 0.85; // 15%
+                        case 'conservative': maxRiskPercent = 0.88; break;
+                        case 'aggressive': maxRiskPercent = 0.82; break;
+                        default: maxRiskPercent = 0.85;
                     }
                     const atrStop = currentPrice - (optionATR * 1.3);
                     const maxRiskStop = avgPrice * maxRiskPercent;
@@ -783,7 +820,6 @@
                     return { stopLoss, profitPercent, isLosing: true, avgPrice };
                 }
 
-                // --- Trailing Stop for Profitable Trades ---
                 const lockFactor = Math.min(0.95, 1 - Math.exp(-profitPercent / 80));
                 const profitLock = avgPrice + (profitPerContract * lockFactor);
 
@@ -851,10 +887,9 @@
             }
 
             function updateDashboard(result) {
-                // Update both dashboards simultaneously
                 const dashboards = [
-                    { el: desktopDashboard, profit: dashProfitPercent, stop: dashStopLoss, percent: dashStopPercent, label: dashStopLabel },
-                    { el: mobileDashboard, profit: mobileDashProfitPercent, stop: mobileDashStopLoss, percent: mobileDashStopPercent, label: mobileDashStopLabel }
+                    { profit: dashProfitPercent, stop: dashStopLoss, percent: dashStopPercent, label: dashStopLabel },
+                    { profit: mobileDashProfitPercent, stop: mobileDashStopLoss, percent: mobileDashStopPercent, label: mobileDashStopLabel }
                 ];
 
                 dashboards.forEach(d => {
@@ -863,6 +898,7 @@
                         d.stop.textContent = '$0.00';
                         d.percent.textContent = '0.0%';
                         d.label.textContent = 'Risk %';
+                        d.profit.classList.remove('positive', 'negative');
                         return;
                     }
                     const { stopLoss, profitPercent, avgPrice, isLosing } = result;
@@ -870,6 +906,16 @@
                     animateNumber(d.profit, parseFloat(d.profit.textContent) || 0, profitPercent, 300, false, '%');
                     animateNumber(d.stop, parseFloat(d.stop.textContent.replace('$', '')) || 0, stopLoss, 300, true);
                     
+                    if (profitPercent > 0) {
+                        d.profit.classList.add('positive');
+                        d.profit.classList.remove('negative');
+                    } else if (profitPercent < 0) {
+                        d.profit.classList.add('negative');
+                        d.profit.classList.remove('positive');
+                    } else {
+                        d.profit.classList.remove('positive', 'negative');
+                    }
+
                     const stopPercent = avgPrice > 0 ? ((stopLoss - avgPrice) / avgPrice) * 100 : 0;
                     
                     if (isLosing || stopLoss < avgPrice) {
@@ -917,15 +963,28 @@
                 rrMeterContainer.style.display = 'block';
                 
                 const contracts = parseInt(contractsEl.value);
-                if (contracts === 1) {
-                    rrGuidance.textContent = '💡 Strategy: Hold until stop or exit at a key R-level (e.g., 2R or 3R).';
-                } else if (contracts > 1) {
-                    rrGuidance.textContent = '💡 Strategy: Consider selling half at 2R to secure profits, then trail the rest.';
+                let guidanceText = '';
+                switch (contracts) {
+                    case 1:
+                        guidanceText = '💡 Strategy: Hold until stop or exit at a key R-level (e.g., 2R or 3R).';
+                        break;
+                    case 2:
+                        guidanceText = '💡 Strategy: Consider selling 1 at 2R, trail the rest for a home run.';
+                        break;
+                    case 3:
+                        guidanceText = '💡 Strategy: Consider selling 1 at 2R, 1 at 3R, and trail the last one.';
+                        break;
+                    case 4:
+                        guidanceText = '💡 Strategy: Consider selling 2 at 2R, 1 at 3R, and trail the last one.';
+                        break;
+                    default:
+                        guidanceText = '💡 Strategy: Systematically scale out at R-levels to lock in profits.';
                 }
+                rrGuidance.textContent = guidanceText;
             }
 
             function displayAlert(result, inputs) {
-                if (!result || !inputs) return;
+                if (!result || !inputs || alertMessageEl.querySelector('.warning')) return;
                 
                 const { stopLoss, profitPercent, isLosing, avgPrice } = result;
                 let message = '';
@@ -975,11 +1034,10 @@
                     atrValueEl.value = tradeData.atrValue || '';
                     contractsEl.value = tradeData.contracts || '1';
                     
-                    state.tradeType = tradeData.tradeType || 'day';
+                    state.tradeType = tradeData.tradeType || 'swing';
                     state.riskProfile = tradeData.riskProfile || 'balanced';
                     state.storedStopLoss = tradeData.storedStopLoss || null;
 
-                    // Update UI toggles
                     if (tradeTypeToggle.querySelector('.active')) tradeTypeToggle.querySelector('.active').classList.remove('active');
                     if (tradeTypeToggle.querySelector(`[data-type="${state.tradeType}"]`)) tradeTypeToggle.querySelector(`[data-type="${state.tradeType}"]`).classList.add('active');
                     
@@ -990,6 +1048,13 @@
                     runCalculations();
                 }
             }
+            
+            function loadTheme() {
+                const savedTheme = localStorage.getItem('tradingMatrixTheme');
+                if (savedTheme === 'light') {
+                    document.body.classList.remove('dark-mode');
+                }
+            }
 
             function clearAll() {
                 avgPriceEl.value = '';
@@ -998,7 +1063,7 @@
                 atrValueEl.value = '';
                 contractsEl.value = '1';
                 
-                handleToggle({ target: tradeTypeToggle.querySelector('[data-type="day"]') }, 'tradeType', setAtrTimeframe);
+                handleToggle({ target: tradeTypeToggle.querySelector('[data-type="swing"]') }, 'tradeType', setAtrTimeframe);
                 handleToggle({ target: riskProfileToggle.querySelector('[data-profile="balanced"]') }, 'riskProfile');
                 
                 state.storedStopLoss = null;
@@ -1013,25 +1078,19 @@
                 avgPriceEl.focus();
             }
             
-            // --- Input Sanitization for number fields ---
             [avgPriceEl, currentPriceEl, deltaEl, atrValueEl].forEach(el => {
                 el.addEventListener('keydown', (e) => {
-                    // Allow backspace, delete, tab, escape, enter, and period
                     if ([46, 8, 9, 27, 13, 110, 190].includes(e.keyCode) ||
-                        // Allow: Ctrl+A, Command+A
                         (e.keyCode === 65 && (e.ctrlKey === true || e.metaKey === true)) ||
-                        // Allow: home, end, left, right, down, up
                         (e.keyCode >= 35 && e.keyCode <= 40)) {
-                        return; // Let it happen
+                        return;
                     }
-                    // Ensure that it is a number and stop the keypress if not
                     if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
                         e.preventDefault();
                     }
                 });
             });
             
-            // --- Responsive Dashboard Logic ---
             const checkDashboard = () => {
                 if (window.innerWidth <= 600) {
                     desktopDashboard.style.display = 'none';
@@ -1044,7 +1103,7 @@
 
             window.addEventListener('resize', checkDashboard);
             
-            // Initial setup
+            loadTheme();
             loadState();
             checkDashboard();
             avgPriceEl.focus();
