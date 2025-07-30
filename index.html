@@ -682,14 +682,14 @@
             tradeTypeToggle.addEventListener('click', (e) => handleToggle(e, 'tradeType', setAtrTimeframe));
             riskProfileToggle.addEventListener('click', (e) => handleToggle(e, 'riskProfile'));
             
-            // Special listener for Entry Price to auto-fill Current Price
             avgPriceEl.addEventListener('input', () => {
-                currentPriceEl.value = avgPriceEl.value;
+                if (!currentPriceEl.value) {
+                    currentPriceEl.value = avgPriceEl.value;
+                }
                 runCalculations();
                 saveState();
             });
 
-            // Generic listeners for other fields
             [currentPriceEl, deltaEl, atrValueEl, contractsEl].forEach(el => {
                 el.addEventListener('input', () => {
                     runCalculations();
@@ -782,7 +782,7 @@
                      return null;
                 }
                 
-                if (currentPrice > avgPrice * 6) { // 500% profit sanity check
+                if (currentPrice > avgPrice * 6) {
                     alertMessageEl.innerHTML = `<div class="alert warning">⚠️ Extreme profit detected. Please verify inputs are correct.</div>`;
                 } else {
                     alertMessageEl.innerHTML = '';
@@ -964,21 +964,19 @@
                 
                 const contracts = parseInt(contractsEl.value);
                 let guidanceText = '';
-                switch (contracts) {
-                    case 1:
-                        guidanceText = '💡 Strategy: Hold until stop or exit at a key R-level (e.g., 2R or 3R).';
-                        break;
-                    case 2:
-                        guidanceText = '💡 Strategy: Consider selling 1 at 2R, trail the rest for a home run.';
-                        break;
-                    case 3:
-                        guidanceText = '💡 Strategy: Consider selling 1 at 2R, 1 at 3R, and trail the last one.';
-                        break;
-                    case 4:
-                        guidanceText = '💡 Strategy: Consider selling 2 at 2R, 1 at 3R, and trail the last one.';
-                        break;
-                    default:
-                        guidanceText = '💡 Strategy: Systematically scale out at R-levels to lock in profits.';
+
+                if (state.tradeType === 'day') {
+                     switch (contracts) {
+                        case 1: guidanceText = '💡 Day Trade: Target 2R for a clean, disciplined exit.'; break;
+                        case 2: guidanceText = '💡 Day Trade: Consider selling 1 at 1R and the second at 2R.'; break;
+                        default: guidanceText = '💡 Day Trade: Systematically take profits at 1R and 2R levels.';
+                    }
+                } else { // Swing Trade
+                    switch (contracts) {
+                        case 1: guidanceText = '💡 Swing: Hold until stop or exit at a key R-level (e.g., 3R).'; break;
+                        case 2: guidanceText = '💡 Swing: Consider selling 1 at 2R, trail the rest for a home run.'; break;
+                        default: guidanceText = '💡 Swing: Systematically scale out at R-levels to lock in profits.';
+                    }
                 }
                 rrGuidance.textContent = guidanceText;
             }
