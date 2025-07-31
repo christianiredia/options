@@ -406,6 +406,42 @@
             font-size: 0.9em;
         }
 
+        .price-input-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .price-input-group input {
+            flex-grow: 1;
+        }
+        .price-steppers {
+            display: flex;
+            gap: 3px;
+        }
+        .stepper-btn {
+            background: #e9ecef;
+            border: none;
+            border-radius: 6px;
+            font-family: var(--font-mono);
+            font-weight: bold;
+            cursor: pointer;
+            width: 40px; /* UPDATED */
+            height: 46px;
+            font-size: 12px; /* UPDATED */
+            transition: background 0.2s ease;
+        }
+        .stepper-btn:hover {
+            background: #d1d5db;
+        }
+        .dark-mode .stepper-btn {
+            background: #374151;
+            color: var(--text-light);
+        }
+        .dark-mode .stepper-btn:hover {
+            background: #4b5563;
+        }
+
+
         /* --- Responsive Design --- */
         @media (max-width: 768px) {
             .container { padding: 15px; }
@@ -530,7 +566,15 @@
                 <h2>Stop Loss Management</h2>
                 <div class="form-group">
                     <label for="currentPrice">Current Price ($)</label>
-                    <input type="number" id="currentPrice" step="0.01" min="0.01" placeholder="e.g., 2.75" inputmode="decimal">
+                    <div class="price-input-group">
+                        <input type="number" id="currentPrice" step="0.01" min="0.01" placeholder="e.g., 2.75" inputmode="decimal">
+                        <div class="price-steppers">
+                            <button class="stepper-btn" data-step="-0.05">-.05</button>
+                            <button class="stepper-btn" data-step="-0.01">-.01</button>
+                            <button class="stepper-btn" data-step="0.01">+.01</button>
+                            <button class="stepper-btn" data-step="0.05">+.05</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="delta">Option Delta</label>
@@ -695,6 +739,18 @@
                     runCalculations();
                     saveState();
                 });
+            });
+
+            // Price Stepper Listeners
+            document.querySelector('.price-steppers').addEventListener('click', (e) => {
+                if (e.target.classList.contains('stepper-btn')) {
+                    const step = parseFloat(e.target.dataset.step);
+                    const currentValue = parseFloat(currentPriceEl.value) || 0;
+                    const newValue = Math.max(0, currentValue + step);
+                    currentPriceEl.value = newValue.toFixed(2);
+                    runCalculations();
+                    saveState();
+                }
             });
 
             // --- Functions ---
